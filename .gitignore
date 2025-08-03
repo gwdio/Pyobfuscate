@@ -1,0 +1,19 @@
+# Byte-code / caches
+__pycache__/
+*.py[cod]
+*.so
+
+# IDE settings
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# My old “Junk” work
+/Junk (unused)/
+
+# Logs, temp files, etc.
+*.log
+*.tmp
