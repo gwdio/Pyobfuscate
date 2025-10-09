@@ -1,135 +1,128 @@
 # Obfuscate.py
 
-A modular Python code obfuscation toolkit that transforms input scripts into functionally equivalent but harder-to-read output. Designed for safety and extensibility, it applies a sequence of injectors and renaming passes to obscure logic, control flow, and numeric constants. Can be made much harder through injections of `exec`s and other statements but from pure logical obfuscation almost as far as you can take it.
+A modular Python code-obfuscation toolkit that transforms input scripts into functionally equivalent but harder-to-read output. It applies a sequence of injectors and renaming passes to obscure logic, control flow, and numeric constants. The toolkit is configurable and extensible via strategy plug-ins.
 
-## 📁 Project Structure
+## Features
+
+* Pluggable strategies for junk insertion, control-flow rewriting, and numeric literal encoding
+* Deterministic runs via optional seed
+* CLI for local use and FastAPI service for programmatic use
+* Safe namespace tracking and renaming
+
+## Project Structure
 
 ```
 project-root/
-├── Encrpytion/number_obscure_strategies.py   # Numeric obfuscation strategy implementations
-├── Encrpytion/number_obscurer.py             # Injector for number-obscuring transformations
-├── Injectors/conditional_injector.py         # Wraps statements in conditional branches
-├── Injectors/identity_injectors.py           # Applies identity-function wrappers
-├── Injectors/junk_injector.py                # Inserts junk code like dead branches or no-ops
-├── Injectors/junk_conditional_strategies.py  # Strategies for conditional junk code
-├── Injectors/junk_strategies.py              # Generic junk-injection approaches
-├── Injectors/identity_strategies.py          # Strategies for identity-function injection
-├── LoopObfuscation/ob_for.py                 # Loops → convoluted while loops converter
-├── LoopObfuscation/obfuscation_strategies.py # Loop transformation strategies
-├── Renaming/renamer.py                       # Namespace analysis and identifier renaming
-├── NameTracker/naming.py                     # Global name tracker to ensure no collisions
-├── IO/input.py                               # Sample input script (user-provided)
-├── IO/output.py                              # Generated obfuscated script
-└── obfuscate.py                              # Orchestrator: ties injectors into a pipeline
+├── Encrpytion/number_obscure_strategies.py
+├── Encrpytion/number_obscurer.py
+├── Injectors/conditional_injector.py
+├── Injectors/identity_injector.py
+├── Injectors/inject_junk.py
+├── Injectors/junk_conditional_strategies.py
+├── Injectors/junk_strategies.py
+├── Injectors/identity_strategies.py
+├── LoopObfuscation/ob_for.py
+├── LoopObfuscation/obfuscation_strategies.py
+├── Renaming/renamer.py
+├── NameTracker/naming.py
+├── IO/input.py
+├── IO/output.py
+├── obfuscate.py          # CLI
+└── app.py                # REST API
 ```
 
-## 🚀 Installation
+## Installation
 
-1. Clone the repository:
+```bash
+git clone https://github.com/your-username/obfuscate.py.git
+cd obfuscate.py
+pip install -r requirements.txt
+```
 
-   ```bash
-   git clone https://github.com/your-username/obfuscate.py.git
-   cd obfuscate.py
-   ```
-2. Install dependencies (if any):
+## Quickstart (CLI)
 
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## 🔧 Usage
-
-Place your target Python script at `IO/input.py`. Then run:
+Place the target script at `IO/input.py`, then:
 
 ```bash
 python obfuscate.py
 ```
 
-The obfuscated result will be written to `IO/output.py`.
+Output is written to `IO/output.py`.
 
-### Command-Line Options
+## REST API
 
-* **`IO/input.py`**: Path to the source file to obfuscate
-* **`IO/output.py`**: Path to write the obfuscated script
+Start the service:
 
-## 🛠 Customizing the Obfuscation Pipeline
-
-The `main()` function in `obfuscate.py` shows the default pipeline sequence. You can adjust:
-
-1. **Injector order**: Change the transform sequence to apply injectors in a different order.
-2. **Thresholds and weights**: Many injectors accept parameters (e.g., junk probability, identity-factor) to tune aggressiveness.
-3. **Strategy lists**: Swap in or out specific strategies for junk injection, identity functions, numeric obfuscation, or loop transformations.
-
-Example: Swap out `CollatzStrategy` for `ModularMultiplicativeStrategy` in loop obfuscation:
-
-```python
-from LoopObfuscation.obfuscation_strategies import ModularMultiplicativeStrategy
-
-# Replace:
-tree = Ob_For(naming, CollatzStrategy).apply(tree)
-# With:
-tree = Ob_For(naming, ModularMultiplicativeStrategy).apply(tree)
+```bash
+uvicorn app:app --reload
 ```
 
-## ⚙️ Core Components
+### Endpoint
 
-### 1. `JunkInjector`
+`POST /obfuscate`
 
-* **Location**: `Injectors/junk_injector.py`
-* **Purpose**: Inserts dead code branches, no-ops, and opaque predicates.
-* **Key Strategies**: `BitwiseStrategy`, `ArithmeticStrategy`, `NonConstantTimeStrategy`, etc.
+**Request body (JSON):**
 
-### 2. `Ob_For`
+```json
+{
+  "input_path": "IO/input.py",
+  "output_path": "IO/output.py",
+  "enable_junk": true,
+  "enable_loops": true,
+  "enable_conditionals": true,
+  "enable_identities": true,
+  "enable_numbers": true,
+  "enable_renaming": true,
+  "junk_strategies": ["bitwise", "non_constant_time", "arithmetic"],
+  "junk_density": 2,
+  "loop_strategy": "collatz",
+  "conditional_strategies": ["random"],
+  "identity_probability": 0.2,
+  "number_strategies": ["feistel", "xor_string"],
+  "return_code": false,
+  "seed": 42
+}
+```
 
-* **Location**: `LoopObfuscation/ob_for.py`
-* **Purpose**: Converts `for` loops into `while` loops
-### 3. `ConditionalInjector`
+**Response (JSON):**
 
-* **Location**: `Injectors/conditional_injector.py`
-* **Purpose**: Wraps statements in always-true/false conditionals with dummy branches.
-* **Key Strategy**: `RandomConditionalStrategy`
+```json
+{
+  "output_path": "IO/output.py",
+  "code": null
+}
+```
 
-### 4. `IdentityFuncInjector`
+If `return_code` is `true` or `output_path` is omitted, `code` contains the transformed source.
 
-* **Location**: `Injectors/identity_injectors.py`
-* **Purpose**: Wraps expressions or statements with harmless identity functions to confuse analysis.
-* **Key Strategy**: `MixedIdentityStrategy`
+## Configuration Overview
 
-### 5. `NumberObscurerInjector`
+* **input_path** *(required)*: Source `.py` to obfuscate.
+* **output_path**: Destination file for obfuscated code.
+* **enable_* toggles**: Turn individual phases on/off.
+* **junk_strategies**: Subset and order of `["arithmetic","bitwise","non_constant_time","lambda"]`.
+* **junk_density** *(int)*: Intensity of junk insertion.
+* **loop_strategy**: `"plain"` or `"collatz"`.
+* **conditional_strategies**: Currently `["random"]`.
+* **identity_probability** *(float 0–1)*: Frequency of identity wrappers.
+* **number_strategies**: Any ordered subset of `["feistel","xor_string","simple_feistel"]`.
+* **return_code** *(bool)*: Include transformed code in the response.
+* **seed** *(int)*: Makes a run repeatable.
 
-* **Location**: `Encrpytion/number_obscurer.py`
-* **Purpose**: Encodes numeric literals using reversible schemes.
-* **Key Strategies**:
+## Extending
 
-  * `FeistelNumberStrategy` (bit-level mixing via Feistel network)
-  * `XorStringNumberStrategy` (XOR with random string key)
+1. Implement a new strategy in the relevant module.
+2. Register it in the API’s strategy map or wire it in the CLI pipeline.
+3. Validate on representative inputs.
 
-### 6. `Renamer`
+## Testing
 
-* **Location**: `Renaming/renamer.py`
-* **Purpose**: Performs namespace analysis and replaces identifiers with non-meaningful names.
+```bash
+python IO/input.py > original.out
+python IO/output.py > obfuscated.out
+diff original.out obfuscated.out
+```
 
-## 📈 Extending the Toolkit
+## License
 
-1. **Add new strategies**: Implement a new class inheriting from the appropriate `*Strategy` interface (e.g., `JunkConditionalStrategy`, `NumberObscureStrategy`).
-2. **Register your strategy**: Pass it into the injector in `obfuscate.py`.
-3. **Test for correctness**: Ensure `IO/output.py` still executes with identical behavior.
-
-## 🧪 Testing & Validation
-
-* Compare behavior of `IO/input.py` vs. `IO/output.py`:
-
-  ```bash
-  python IO/input.py > original.out
-  python IO/output.py > obfuscated.out
-  diff original.out obfuscated.out
-  ```
-* Use CI to automate pipeline runs and output validation.
-
-## 📄 License
-
-MIT License. See [LICENSE](./LICENSE) for details.
-
----
-
-*Happy Obfuscating!*
+MIT. See `LICENSE`.
