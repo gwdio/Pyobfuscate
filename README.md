@@ -99,7 +99,7 @@ If `return_code` is `true` or `output_path` is omitted, `code` contains the tran
 
 * **input_path** *(required)*: Source `.py` to obfuscate.
 * **output_path**: Destination file for obfuscated code.
-* **enable_* toggles**: Turn individual phases on/off.
+* **enable_\* toggles**: Turn individual phases on/off.
 * **junk_strategies**: Subset and order of `["arithmetic","bitwise","non_constant_time","lambda"]`.
 * **junk_density** *(int)*: Intensity of junk insertion.
 * **loop_strategy**: `"plain"` or `"collatz"`.
