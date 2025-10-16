@@ -1,4 +1,4 @@
-# Obfuscate.py
+# Pyobfuscate
 
 A modular Python code-obfuscation toolkit that transforms input scripts into functionally equivalent but harder-to-read output. It applies a sequence of injectors and renaming passes to obscure logic, control flow, and numeric constants. The toolkit is configurable and extensible via strategy plug-ins.
 
@@ -34,8 +34,8 @@ project-root/
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/obfuscate.py.git
-cd obfuscate.py
+git clone https://github.com/gwdio/Pyobfuscate.git
+cd Pyobfuscate
 pip install -r requirements.txt
 ```
 
