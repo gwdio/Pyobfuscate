@@ -76,6 +76,25 @@ Key strategy families:
 
 The API wraps pipeline execution in `_PIPELINE_LOCK` (threading lock) to prevent concurrent requests from corrupting shared RNG state.
 
+## Active Development
+
+Planned work is tracked in `plans/`. Key plans:
+
+- `plans/plan-1-deploy/` — full deploy: frontend, hybrid Pyodide/Lambda execution, IaC (10 subplans, see `index.md`)
+- `plans/plan-3-collatz-linear.md` — fix O(n²) loop index in `CollatzStrategy`
+- `plans/plan-4-collatz-seed.md` — brute-force seed determination for short Collatz loops
+- `plans/plan-import-obfuscation.md` — obfuscate `import` statements
+- `plans/plan-string-obfuscation.md` — obfuscate string literals
+- `plans/plan-bogus-functions.md` — inject dead functions at module level
+- `plans/plan-depth-size-guard.md` — input validation before `ast.parse()`
+- `plans/plan-testing.md` — automated round-trip test suite
+
+## Branch Convention
+
+- One branch per plan: `plan/3-collatz-linear`, `plan/4-collatz-seed`, `plan/string-obfuscation`, etc.
+- All deploy subplans (`plan-1-deploy/`) share a single long-running branch: `deploy`
+- `main` receives merges only when a plan is fully verified
+
 ### API Config (`app.py`)
 
 `ObfuscationConfig` (Pydantic) exposes:
