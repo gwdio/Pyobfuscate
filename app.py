@@ -3,31 +3,29 @@ import ast
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 # === Libraries ===
-from Encryption.number_obscure_strategies import (
-    FeistelNumberStrategy,
-    XorStringNumberStrategy,
-    SimpleFeistelNumberStrategy,
-)
+# Import strategy modules so subclasses register themselves via __init_subclass__
+import Encryption.number_obscure_strategies as _num_strats
+import Injectors.junk_strategies as _junk_strats
+import Injectors.junk_conditional_strategies as _cond_strats
+import Injectors.identity_strategies as _id_strats
+import LoopObfuscation.obfuscation_strategies as _loop_strats
+
+from Encryption.number_obscure_strategies import NumberObscureStrategy
 from Encryption.number_obscurer import NumberObscurerInjector
 from Injectors.conditional_injector import ConditionalInjector
 from Injectors.identity_injector import IdentityFuncInjector
-from Injectors.identity_strategies import MixedIdentityStrategy
+from Injectors.identity_strategies import IdentityFuncStrategy, MixedIdentityStrategy
 from Injectors.inject_junk import JunkInjector
-from Injectors.junk_conditional_strategies import RandomConditionalStrategy
-from Injectors.junk_strategies import (
-    ArithmeticStrategy,
-    BitwiseStrategy,
-    NonConstantTimeStrategy,
-    LambdaStrategy,
-)
+from Injectors.junk_conditional_strategies import JunkConditionalStrategy
+from Injectors.junk_strategies import JunkInjectionStrategy
 from LoopObfuscation.ob_for import Ob_For
-from LoopObfuscation.obfuscation_strategies import PlainStrategy, CollatzStrategy
+from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Renaming.renamer import Renamer
 from NameTracker.naming import Naming
 
@@ -74,26 +72,6 @@ _PIPELINE_LOCK = threading.RLock()
 # ------------------------------------------------------------------------------
 app = FastAPI(title="Obfuscator API", version="1.0.0")
 
-# ---- registries to map simple strings -> classes ----
-JUNK_STRATEGIES = {
-    "arithmetic": ArithmeticStrategy,
-    "bitwise": BitwiseStrategy,
-    "non_constant_time": NonConstantTimeStrategy,
-    "lambda": LambdaStrategy,
-}
-COND_STRATEGIES = {
-    "random": RandomConditionalStrategy,
-}
-LOOP_STRATEGIES = {
-    "plain": PlainStrategy,
-    "collatz": CollatzStrategy,
-}
-NUMBER_STRATEGIES = {
-    "feistel": FeistelNumberStrategy,
-    "simple_feistel": SimpleFeistelNumberStrategy,
-    "xor_string": XorStringNumberStrategy,
-}
-
 # ---- request/response models ----
 class ObfuscationConfig(BaseModel):
     input_path: Path = Field(..., description="Path to the input .py file")
@@ -109,24 +87,24 @@ class ObfuscationConfig(BaseModel):
     enable_numbers: bool = True
     enable_renaming: bool = True
 
-    # selections / knobs
-    junk_strategies: List[Literal["arithmetic", "bitwise", "non_constant_time", "lambda"]] = [
-        "bitwise",
-        "non_constant_time",
-        "arithmetic",
+    # selections / knobs (use class names from registry)
+    junk_strategies: List[str] = [
+        "BitwiseStrategy",
+        "NonConstantTimeStrategy",
+        "ArithmeticStrategy",
     ]
     junk_density: int = 2
 
-    loop_strategy: Literal["plain", "collatz"] = "collatz"
-    conditional_strategies: List[Literal["random"]] = ["random"]
+    loop_strategy: str = "CollatzStrategy"
+    conditional_strategies: List[str] = ["RandomConditionalStrategy"]
     identity_probability: float = 0.2
-    number_strategies: List[Literal["feistel", "xor_string", "simple_feistel"]] = [
-        "feistel",
-        "xor_string",
+    number_strategies: List[str] = [
+        "FeistelNumberStrategy",
+        "XorStringNumberStrategy",
     ]
 
     # output options
-    return_code: bool = True  # include transformed code in response body
+    return_code: bool = True
 
     # reproducibility
     seed: Optional[int] = Field(None, description="Seed for deterministic output")
@@ -138,6 +116,13 @@ class ObfuscationResult(BaseModel):
 # ------------------------------------------------------------------------------
 # Core pipeline
 # ------------------------------------------------------------------------------
+def _resolve(registry: dict, name: str, phase: str):
+    if name not in registry:
+        valid = ", ".join(sorted(registry))
+        raise ValueError(f"Unknown {phase} strategy '{name}'. Valid options: {valid}")
+    return registry[name]
+
+
 def run_pipeline(cfg: ObfuscationConfig) -> str:
     if not cfg.input_path.exists():
         raise FileNotFoundError(f"Input file not found: {cfg.input_path}")
@@ -150,31 +135,25 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
             naming = Naming()
             naming.analyze(tree)
 
-            # Junk
             if cfg.enable_junk and cfg.junk_strategies:
-                selected = [JUNK_STRATEGIES[k] for k in cfg.junk_strategies]
+                selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in cfg.junk_strategies]
                 tree = JunkInjector(naming, selected, cfg.junk_density).apply(tree)
 
-            # Loops
             if cfg.enable_loops:
-                loop_cls = LOOP_STRATEGIES[cfg.loop_strategy]
+                loop_cls = _resolve(LoopObfuscationStrategy._registry, cfg.loop_strategy, "loop")
                 tree = Ob_For(naming, loop_cls).apply(tree)
 
-            # Conditionals
             if cfg.enable_conditionals and cfg.conditional_strategies:
-                cond_selected = [COND_STRATEGIES[k] for k in cfg.conditional_strategies]
+                cond_selected = [_resolve(JunkConditionalStrategy._registry, k, "conditional") for k in cfg.conditional_strategies]
                 tree = ConditionalInjector(naming, cond_selected, 1).apply(tree)
 
-            # Identities
             if cfg.enable_identities:
                 tree = IdentityFuncInjector(MixedIdentityStrategy(), cfg.identity_probability).apply(tree)
 
-            # Numbers (can apply multiple)
             if cfg.enable_numbers and cfg.number_strategies:
                 for ns in cfg.number_strategies:
-                    tree = NumberObscurerInjector(naming, NUMBER_STRATEGIES[ns]).apply(tree)
+                    tree = NumberObscurerInjector(naming, _resolve(NumberObscureStrategy._registry, ns, "number")).apply(tree)
 
-            # Renaming last
             if cfg.enable_renaming:
                 tree = Renamer(naming.get_namespace()).apply(tree)
 
@@ -184,6 +163,17 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
 # ------------------------------------------------------------------------------
 # Endpoints
 # ------------------------------------------------------------------------------
+@app.get("/strategies")
+def get_strategies():
+    return {
+        "junk": sorted(JunkInjectionStrategy._registry),
+        "conditional": sorted(JunkConditionalStrategy._registry),
+        "loop": sorted(LoopObfuscationStrategy._registry),
+        "identity": sorted(IdentityFuncStrategy._registry),
+        "number": sorted(NumberObscureStrategy._registry),
+    }
+
+
 @app.post("/obfuscate", response_model=ObfuscationResult)
 def obfuscate(cfg: ObfuscationConfig):
     try:

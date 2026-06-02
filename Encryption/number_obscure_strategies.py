@@ -9,6 +9,11 @@ class NumberObscureStrategy:
     Base interface for number‐obscuring strategies.
     Subclasses must implement `obscure(value)` and may override `get_decoder()`.
     """
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        NumberObscureStrategy._registry[cls.__name__] = cls
 
     def __init__(self, naming: Naming):
         self.naming = naming
