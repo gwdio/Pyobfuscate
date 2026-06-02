@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from Injectors.identity_strategies import IdentityFuncStrategy
@@ -12,7 +14,47 @@ from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Encryption.number_obscure_strategies import NumberObscureStrategy
 from pipeline import DEFAULT_STAGE_ORDER, ObfuscationConfig, run_pipeline
 
+_BASE = Path(__file__).parent
+
+# Files shipped to Pyodide's virtual FS for client-side execution
+_PACKAGE_FILES = [
+    "pipeline.py",
+    "Encryption/__init__.py",
+    "Encryption/number_obscure_strategies.py",
+    "Encryption/number_obscurer.py",
+    "Injectors/__init__.py",
+    "Injectors/conditional_injector.py",
+    "Injectors/identity_injector.py",
+    "Injectors/identity_strategies.py",
+    "Injectors/inject_junk.py",
+    "Injectors/junk_conditional_strategies.py",
+    "Injectors/junk_strategies.py",
+    "LoopObfuscation/__init__.py",
+    "LoopObfuscation/for_to_while_generic.py",
+    "LoopObfuscation/loop_simplifier.py",
+    "LoopObfuscation/ob_for.py",
+    "LoopObfuscation/obfuscation_strategies.py",
+    "NameTracker/__init__.py",
+    "NameTracker/naming.py",
+    "Renaming/__init__.py",
+    "Renaming/renamer.py",
+    "Utils/__init__.py",
+    "Utils/random_seeder.py",
+]
+
 app = FastAPI(title="Obfuscator API", version="1.0.0")
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/frontend/index.html")
+
+
+@app.get("/package", include_in_schema=False)
+def get_package():
+    """Return all package source files for Pyodide to load into its virtual FS."""
+    return {rel: (_BASE / rel).read_text(encoding="utf-8") if (_BASE / rel).exists() else ""
+            for rel in _PACKAGE_FILES}
 
 
 # Pydantic request/response models (API layer only)
@@ -79,3 +121,9 @@ def obfuscate(req: ObfuscationRequest):
         result.code = transformed
 
     return result
+
+
+# Serve frontend last so API routes take precedence
+_FRONTEND_DIR = _BASE / "frontend"
+if _FRONTEND_DIR.exists():
+    app.mount("/frontend", StaticFiles(directory=_FRONTEND_DIR), name="frontend")

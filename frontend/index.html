@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pyobfuscate</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <span class="logo">pyobfuscate</span>
+    <div class="exec-toggle">
+      <label class="radio-label">
+        <input type="radio" name="execPath" value="client" checked>
+        <span>Client (Pyodide)</span>
+      </label>
+      <label class="radio-label">
+        <input type="radio" name="execPath" value="server">
+        <span>Server (Lambda)</span>
+      </label>
+    </div>
+    <div id="pyodide-status" class="pyodide-status loading">Loading Pyodide…</div>
+  </header>
+
+  <main>
+    <div class="panel left-panel">
+      <div class="pane-label">Input</div>
+      <textarea id="input" spellcheck="false" placeholder="Paste Python source code here…"></textarea>
+
+      <section class="pipeline-section">
+        <div class="section-header">
+          <span class="pane-label">Pipeline</span>
+          <span class="hint">drag to reorder</span>
+        </div>
+        <ul id="stage-list" class="stage-list"></ul>
+      </section>
+
+      <section class="options-section">
+        <div class="seed-row">
+          <label for="seed" class="pane-label">Seed</label>
+          <input type="number" id="seed" placeholder="random" min="0">
+        </div>
+
+        <div id="upload-section" class="upload-row">
+          <label for="custom-upload" class="pane-label">Custom Strategy</label>
+          <input type="file" id="custom-upload" accept=".py">
+          <div id="upload-status" class="upload-status"></div>
+        </div>
+      </section>
+
+      <button id="submit-btn" class="btn-primary">Obfuscate</button>
+      <div class="hint key-hint">Ctrl+Enter to run</div>
+    </div>
+
+    <div class="panel right-panel">
+      <div class="output-header">
+        <span class="pane-label">Output</span>
+        <button id="copy-btn" class="btn-secondary" disabled>Copy</button>
+      </div>
+      <textarea id="output" readonly spellcheck="false" placeholder="Obfuscated code will appear here…"></textarea>
+      <div id="error-msg" class="error-msg"></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
