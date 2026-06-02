@@ -21,7 +21,8 @@ Thumbs.db
 # Build artifacts
 dist/
 
-# CDK
-infra/.venv/
-infra/cdk.out/
-infra/*.egg-info/
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/*.tfplan
