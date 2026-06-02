@@ -102,7 +102,7 @@ class CollatzStrategy(LoopObfuscationStrategy):
         for _ in range(n):
             if ((seed - b) % a == 0
                and ((seed - b) // a) % 2 == 1
-               and random.random() > 0.95
+               and random.random() < 0.95
                and seed not in {2,4,8,16,32,40,1312}):
                 seed = (seed - b) // a
             else:

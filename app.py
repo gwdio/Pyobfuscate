@@ -9,12 +9,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 # === Libraries ===
-from Encrpytion.number_obscure_strategies import (
+from Encryption.number_obscure_strategies import (
     FeistelNumberStrategy,
     XorStringNumberStrategy,
     SimpleFeistelNumberStrategy,
 )
-from Encrpytion.number_obscurer import NumberObscurerInjector
+from Encryption.number_obscurer import NumberObscurerInjector
 from Injectors.conditional_injector import ConditionalInjector
 from Injectors.identity_injector import IdentityFuncInjector
 from Injectors.identity_strategies import MixedIdentityStrategy
