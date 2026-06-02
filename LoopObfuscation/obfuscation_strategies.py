@@ -7,6 +7,12 @@ class LoopObfuscationStrategy:
     Abstract base for obfuscation strategies for ForToWhileGeneric.
     Provides default loop_var generation and hooks for AST snippet generation and helper injection.
     """
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        LoopObfuscationStrategy._registry[cls.__name__] = cls
+
     def __init__(self, naming, start: int, stop: int, step: int):
         self.naming = naming
         self.start = start

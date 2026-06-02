@@ -6,6 +6,12 @@ class IdentityFuncStrategy:
     """
     Strategy interface for identity-function wrapping.
     """
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        IdentityFuncStrategy._registry[cls.__name__] = cls
+
     def wrap(self, expr: ast.expr) -> ast.expr:
         """
         Given an expression node, return a new expr that evaluates

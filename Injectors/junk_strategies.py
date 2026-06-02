@@ -8,6 +8,12 @@ class JunkInjectionStrategy:
     Strategies are constructed with the list of generated junk variable names and
     must implement get_junk() to return AST statements referencing those names.
     """
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        JunkInjectionStrategy._registry[cls.__name__] = cls
+
     def __init__(self, junk_vars: List[str]):
         self.junk_vars = junk_vars
 

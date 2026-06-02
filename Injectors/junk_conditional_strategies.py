@@ -7,6 +7,12 @@ class JunkConditionalStrategy:
     Interface for junk conditional strategies.
     Must implement wrap(stmt: ast.stmt) -> List[ast.stmt].
     """
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        JunkConditionalStrategy._registry[cls.__name__] = cls
+
     def wrap(self, stmt: ast.stmt) -> List[ast.stmt]:
         raise NotImplementedError
 
