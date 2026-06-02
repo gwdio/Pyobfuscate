@@ -17,3 +17,11 @@ Thumbs.db
 # Logs, temp files, etc.
 *.log
 *.tmp
+
+# Build artifacts
+dist/
+
+# CDK
+infra/.venv/
+infra/cdk.out/
+infra/*.egg-info/
