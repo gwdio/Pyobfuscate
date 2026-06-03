@@ -15,3 +15,8 @@ variable "certificate_arn" {
   type        = string
   default     = null
 }
+
+variable "alert_email" {
+  description = "Email address for pyobfuscate invocation spike alerts"
+  type        = string
+}

@@ -16,6 +16,8 @@ _BLOCKED_FIELDS = {"input_path", "output_path", "return_code"}
 def lambda_handler(event, context):
     try:
         body = event.get("body") or "{}"
+        if isinstance(body, str) and len(body.encode()) > 51_200:
+            return _error(413, "Payload too large")
         payload = json.loads(body) if isinstance(body, str) else body
 
         source = payload.pop("source", None)

@@ -13,8 +13,8 @@ provider "aws" {
 }
 
 locals {
-  lambda_zip    = "${path.module}/../dist/lambda.zip"
-  frontend_dir  = "${path.module}/../frontend"
+  lambda_zip   = "${path.module}/../dist/lambda.zip"
+  frontend_dir = "${path.module}/../frontend"
 
   # Strip "https://" and trailing "/" from the Function URL to get a bare domain
   lambda_domain = trim(replace(aws_lambda_function_url.obfuscator.function_url, "https://", ""), "/")
@@ -55,26 +55,35 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 # ── Lambda ────────────────────────────────────────────────────────────────────
 
 resource "aws_lambda_function" "obfuscator" {
-  filename         = local.lambda_zip
-  source_code_hash = filebase64sha256(local.lambda_zip)
-  function_name    = "pyobfuscate"
-  role             = aws_iam_role.lambda.arn
-  handler          = "lambda_handler.lambda_handler"
-  runtime          = "python3.12"
-  timeout          = 30
-  memory_size      = 512
-  description      = "pyobfuscate engine — server execution path"
+  filename                       = local.lambda_zip
+  source_code_hash               = filebase64sha256(local.lambda_zip)
+  function_name                  = "pyobfuscate"
+  role                           = aws_iam_role.lambda.arn
+  handler                        = "lambda_handler.lambda_handler"
+  runtime                        = "python3.12"
+  timeout                        = 10
+  memory_size                    = 256
+  reserved_concurrent_executions = 10
+  description                    = "pyobfuscate engine — server execution path"
 }
 
+# AWS_IAM auth — only CloudFront can invoke via the OAC + resource policy below
 resource "aws_lambda_function_url" "obfuscator" {
   function_name      = aws_lambda_function.obfuscator.function_name
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
+}
 
-  cors {
-    allow_origins = ["*"]
-    allow_methods = ["POST"]
-    allow_headers = ["Content-Type"]
-  }
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  statement_id  = "AllowCloudFrontServicePrincipal"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.obfuscator.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
+}
+
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/pyobfuscate"
+  retention_in_days = 7
 }
 
 # ── S3 frontend bucket ────────────────────────────────────────────────────────
@@ -101,7 +110,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   }
 }
 
-# ── CloudFront OAC + bucket policy ───────────────────────────────────────────
+# ── CloudFront OACs ───────────────────────────────────────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "pyobfuscate-frontend-oac"
@@ -109,6 +118,15 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
+
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  name                              = "pyobfuscate-lambda-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# ── S3 bucket policy (CloudFront OAC only) ───────────────────────────────────
 
 data "aws_iam_policy_document" "s3_cloudfront" {
   statement {
@@ -160,10 +178,11 @@ resource "aws_cloudfront_distribution" "main" {
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
-  # Lambda Function URL origin (/obfuscate)
+  # Lambda Function URL origin — OAC signs requests with SigV4 (AWS_IAM required)
   origin {
-    domain_name = local.lambda_domain
-    origin_id   = "lambda-obfuscator"
+    domain_name              = local.lambda_domain
+    origin_id                = "lambda-obfuscator"
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -218,4 +237,44 @@ resource "aws_s3_object" "frontend" {
   source       = "${local.frontend_dir}/${each.value}"
   etag         = filemd5("${local.frontend_dir}/${each.value}")
   content_type = lookup(local.mime_types, regex("\\.[^.]+$", each.value), "application/octet-stream")
+}
+
+# ── Alerts ───────────────────────────────────────────────────────────────────
+
+resource "aws_sns_topic" "alerts" {
+  name = "pyobfuscate-alerts"
+}
+
+resource "aws_sns_topic_subscription" "alerts_email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+resource "aws_cloudwatch_metric_alarm" "invocations_per_minute" {
+  alarm_name          = "pyobfuscate-invocations-per-minute"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Invocations"
+  dimensions          = { FunctionName = aws_lambda_function.obfuscator.function_name }
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 30
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "invocations_per_hour" {
+  alarm_name          = "pyobfuscate-invocations-per-hour"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Invocations"
+  dimensions          = { FunctionName = aws_lambda_function.obfuscator.function_name }
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 1
+  threshold           = 1000
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 }
