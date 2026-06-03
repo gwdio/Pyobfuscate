@@ -5,15 +5,14 @@ variable "aws_region" {
 }
 
 variable "domain_name" {
-  description = "Optional custom domain for the CloudFront distribution (e.g. pyobfuscate.example.com)"
+  description = "Custom domain for the CloudFront distribution"
   type        = string
-  default     = null
+  default     = "pyobfuscate.grantwang.dev"
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN in us-east-1 for the custom domain (required when domain_name is set)"
+  description = "ACM certificate ARN in us-east-1 covering the domain (*.grantwang.dev)"
   type        = string
-  default     = null
 }
 
 variable "alert_email" {
