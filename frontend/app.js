@@ -555,8 +555,21 @@ json.dumps({
 // ============================================================
 
 function updateUploadVisibility() {
-  const section = $('upload-section');
-  if (section) section.style.display = state.executionPath === 'client' ? '' : 'none';
+  const input = $('custom-upload');
+  const status = $('upload-status');
+  if (!input) return;
+
+  const isServer = state.executionPath === 'server';
+  input.disabled = isServer;
+  input.title = isServer ? 'Custom modules require Pyodide — switch to Client mode' : '';
+  $('upload-section').style.opacity = isServer ? '0.45' : '';
+  if (isServer) {
+    status.textContent = 'Not available in server mode';
+    status.className = 'upload-status';
+  } else if (status.textContent === 'Not available in server mode') {
+    status.textContent = '';
+    status.className = 'upload-status';
+  }
 }
 
 // ============================================================
@@ -565,6 +578,7 @@ function updateUploadVisibility() {
 
 function init() {
   renderStages();
+  updateUploadVisibility();
 
   // Execution path toggle
   document.querySelectorAll('input[name="execPath"]').forEach(radio => {
