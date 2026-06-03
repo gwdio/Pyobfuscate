@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in real values before running terraform apply.
+
+# Find your cert ARN:
+#   aws acm list-certificates --region us-east-1 \
+#     --query "CertificateSummaryList[?contains(DomainName,'grantwang.dev')].CertificateArn" \
+#     --output text
+certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
+
+alert_email = "you@example.com"
