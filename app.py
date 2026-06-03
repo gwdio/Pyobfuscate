@@ -50,11 +50,17 @@ def root():
     return RedirectResponse(url="/frontend/index.html")
 
 
-@app.get("/package", include_in_schema=False)
-def get_package():
-    """Return all package source files for Pyodide to load into its virtual FS."""
+def _package_files() -> dict:
     return {rel: (_BASE / rel).read_text(encoding="utf-8") if (_BASE / rel).exists() else ""
             for rel in _PACKAGE_FILES}
+
+@app.get("/package", include_in_schema=False)
+def get_package():
+    return _package_files()
+
+@app.get("/package.json", include_in_schema=False)
+def get_package_json():
+    return _package_files()
 
 
 # Pydantic request/response models (API layer only)

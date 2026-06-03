@@ -89,6 +89,11 @@ class _Rewriter(ast.NodeTransformer):
             arg.arg = self.mapping.get(arg.arg, arg.arg)
         return self.generic_visit(node)
 
+    def visit_Global(self, node: ast.Global):
+        # ast.Global stores plain strings, not ast.Name nodes — rename them explicitly.
+        node.names = [self.mapping.get(n, n) for n in node.names]
+        return node
+
     def visit_Name(self, node: ast.Name):
         if node.id in self.mapping:
             node.id = self.mapping[node.id]

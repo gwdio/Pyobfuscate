@@ -317,7 +317,7 @@ async function initPyodide() {
 }
 
 async function loadPackage() {
-  const resp = await fetch('/package');
+  const resp = await fetch('/package.json');
   if (!resp.ok) throw new Error(`/package returned ${resp.status}`);
   const files = await resp.json();
 
@@ -461,18 +461,9 @@ run_pipeline(cfg)
 async function runServerSide(code) {
   const payload = JSON.stringify({ source: code, ...buildConfig() });
 
-  // CloudFront Lambda OAC requires the body hash in x-amz-content-sha256
-  const bodyBytes = new TextEncoder().encode(payload);
-  const digest = await crypto.subtle.digest('SHA-256', bodyBytes);
-  const hash = [...new Uint8Array(digest)]
-    .map(b => b.toString(16).padStart(2, '0')).join('');
-
   const resp = await fetch('/obfuscate', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-amz-content-sha256': hash,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: payload,
   });
 

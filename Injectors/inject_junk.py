@@ -44,6 +44,10 @@ class JunkInjector(ast.NodeTransformer):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self.generic_visit(node)
         node.body = self._inject_in_body(node.body)
+        # Junk vars are declared at module level; without an explicit `global`
+        # declaration, any assignment inside a function makes Python treat them
+        # as local, causing UnboundLocalError on the read side of `junk0 = junk0 * ...`.
+        node.body = [ast.Global(names=list(self.junk_vars))] + node.body
         return node
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
