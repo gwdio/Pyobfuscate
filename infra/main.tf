@@ -264,6 +264,40 @@ resource "aws_cloudwatch_metric_alarm" "invocations_per_minute" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
+# ── Route 53 DNS ─────────────────────────────────────────────────────────────
+
+data "aws_route53_zone" "root" {
+  name         = "grantwang.dev."
+  private_zone = false
+}
+
+# Alias records (A + AAAA) — preferred over CNAME for CloudFront
+resource "aws_route53_record" "pyobfuscate_a" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.main.domain_name
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "pyobfuscate_aaaa" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.main.domain_name
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# ── Alerts ───────────────────────────────────────────────────────────────────
+
 resource "aws_cloudwatch_metric_alarm" "invocations_per_hour" {
   alarm_name          = "pyobfuscate-invocations-per-hour"
   namespace           = "AWS/Lambda"

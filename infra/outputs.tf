@@ -12,3 +12,8 @@ output "frontend_bucket" {
   description = "S3 bucket name for frontend assets"
   value       = aws_s3_bucket.frontend.bucket
 }
+
+output "site_url" {
+  description = "Live site URL"
+  value       = "https://${var.domain_name}"
+}
