@@ -1,4 +1,5 @@
 import json
+import sys
 import tempfile
 import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
@@ -9,12 +10,18 @@ from Utils.input_guard import validate_input
 
 _TIMEOUT_SECONDS = 10
 
+sys.setrecursionlimit(1000)
+
 # Fields the caller must not inject (server-side concerns)
 _BLOCKED_FIELDS = {"input_path", "output_path", "return_code"}
 
 
 def lambda_handler(event, context):
     try:
+        method = event.get("requestContext", {}).get("http", {}).get("method", "POST")
+        if method.upper() != "POST":
+            return _error(405, "Method not allowed")
+
         body = event.get("body") or "{}"
         if isinstance(body, str) and len(body.encode()) > 51_200:
             return _error(413, "Payload too large")
@@ -54,12 +61,16 @@ def lambda_handler(event, context):
         return _error(408, f"Pipeline timed out after {_TIMEOUT_SECONDS} seconds")
     except json.JSONDecodeError:
         return _error(400, "Invalid JSON body")
+    except SyntaxError as e:
+        return _error(400, f"Syntax error in source: {e}")
+    except RecursionError:
+        return _error(400, "Input too deeply nested")
     except (ValueError, TypeError) as e:
         return _error(400, str(e))
     except FileNotFoundError as e:
         return _error(404, str(e))
     except Exception:
-        return _error(500, f"Internal error: {traceback.format_exc()}")
+        return _error(500, "Processing error")
 
 
 def _run_with_timeout(cfg: ObfuscationConfig) -> str:

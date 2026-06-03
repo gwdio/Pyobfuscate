@@ -61,10 +61,9 @@ resource "aws_lambda_function" "obfuscator" {
   role                           = aws_iam_role.lambda.arn
   handler                        = "lambda_handler.lambda_handler"
   runtime                        = "python3.12"
-  timeout                        = 10
-  memory_size                    = 256
-  reserved_concurrent_executions = 10
-  description                    = "pyobfuscate engine — server execution path"
+  timeout     = 10
+  memory_size = 256
+  description = "pyobfuscate engine — server execution path"
 }
 
 # AWS_IAM auth — only CloudFront can invoke via the OAC + resource policy below
@@ -236,7 +235,7 @@ resource "aws_s3_object" "frontend" {
   key          = each.value
   source       = "${local.frontend_dir}/${each.value}"
   etag         = filemd5("${local.frontend_dir}/${each.value}")
-  content_type = lookup(local.mime_types, regex("\\.[^.]+$", each.value), "application/octet-stream")
+  content_type = lookup(local.mime_types, try(regex("\\.[^.]+$", each.value), ""), "application/octet-stream")
 }
 
 # ── Alerts ───────────────────────────────────────────────────────────────────

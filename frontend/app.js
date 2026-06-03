@@ -458,9 +458,27 @@ run_pipeline(cfg)
 `);
 }
 
-async function runServerSide(_code) {
-  // Lambda path wired in plan 4a
-  throw new Error('Server (Lambda) execution not yet wired — coming in plan 4a.\nUse Client mode for now.');
+async function runServerSide(code) {
+  const payload = JSON.stringify({ source: code, ...buildConfig() });
+
+  // CloudFront Lambda OAC requires the body hash in x-amz-content-sha256
+  const bodyBytes = new TextEncoder().encode(payload);
+  const digest = await crypto.subtle.digest('SHA-256', bodyBytes);
+  const hash = [...new Uint8Array(digest)]
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+
+  const resp = await fetch('/obfuscate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-amz-content-sha256': hash,
+    },
+    body: payload,
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error ?? `Server error ${resp.status}`);
+  return data.code;
 }
 
 // ============================================================
