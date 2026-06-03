@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "aws_profile" {
+  description = "AWS CLI profile to use for authentication"
+  type        = string
+  default     = null
+}
+
 variable "domain_name" {
   description = "Custom domain for the CloudFront distribution"
   type        = string

@@ -7,3 +7,5 @@
 certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
 
 alert_email = "you@example.com"
+
+aws_profile = "default"
