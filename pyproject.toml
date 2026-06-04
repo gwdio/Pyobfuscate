@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Python AST obfuscator"
 requires-python = ">=3.9"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["frontend*", "plans*", "IO*", ".venv*"]

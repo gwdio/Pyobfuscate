@@ -1,4 +1,4 @@
-.PHONY: help install serve cli verify build build-lambda build-package deploy plan tf-init tf-validate clean
+.PHONY: help install serve cli verify test build build-lambda build-package deploy plan tf-init tf-validate clean
 
 PYTHON   := python3
 UVICORN  := uvicorn
@@ -13,6 +13,7 @@ help:
 	@echo "  serve          uvicorn app:app --reload"
 	@echo "  cli            run obfuscate.py interactively"
 	@echo "  verify         diff IO/input.py vs IO/output.py runtime output"
+	@echo "  test           run pytest test suite"
 	@echo ""
 	@echo "Build"
 	@echo "  build          build-lambda + build-package"
@@ -44,6 +45,9 @@ verify:
 	$(PYTHON) IO/output.py > /tmp/obfuscated.out
 	diff /tmp/original.out /tmp/obfuscated.out && echo "OK: outputs match"
 
+test:
+	pytest
+
 # ── Build ────────────────────────────────────────────────────────────────────
 
 build: build-lambda build-package
@@ -56,7 +60,7 @@ build-package:
 
 # ── Deploy ───────────────────────────────────────────────────────────────────
 
-deploy: build
+deploy: test build
 	cd $(TF_DIR) && $(TF) apply
 
 plan: build
