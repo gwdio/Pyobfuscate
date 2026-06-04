@@ -154,7 +154,6 @@ function renderStages() {
     const li = document.createElement('li');
     li.className = `stage-item${stage.enabled ? '' : ' disabled'}`;
     li.dataset.idx = idx;
-    li.draggable = true;
 
     const configPanel = hasConfig(stage)
       ? `<div class="stage-config" id="config-${idx}"
@@ -255,12 +254,17 @@ let dragSrcIdx = null;
 
 function setupDragDrop(list) {
   Array.from(list.children).forEach(item => {
+    const handle = item.querySelector('.drag-handle');
+    if (handle) {
+      handle.addEventListener('mousedown', () => { item.draggable = true; });
+    }
     item.addEventListener('dragstart', e => {
       dragSrcIdx = +item.dataset.idx;
       item.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
     item.addEventListener('dragend', () => {
+      item.draggable = false;
       item.classList.remove('dragging');
       dragSrcIdx = null;
     });
@@ -287,6 +291,14 @@ function setupDragDrop(list) {
 // Pyodide init & package load
 // ============================================================
 
+function syncRunButton() {
+  const loading = state.executionPath === 'client' && !state.pyodideReady && !state.pyodideError;
+  const btn = $('submit-btn');
+  btn.disabled = loading;
+  if (loading && btn.textContent === 'Obfuscate') btn.textContent = 'Loading…';
+  if (!loading && btn.textContent === 'Loading…') btn.textContent = 'Obfuscate';
+}
+
 async function initPyodide() {
   const statusEl = $('pyodide-status');
   try {
@@ -305,17 +317,13 @@ async function initPyodide() {
     state.pyodideReady = true;
     statusEl.textContent = 'Client ready';
     statusEl.className = 'pyodide-status ready';
+    syncRunButton();
   } catch (err) {
     state.pyodideError = err.message;
-    statusEl.textContent = 'Pyodide unavailable — server mode only';
+    statusEl.textContent = 'Pyodide failed — switch to Server mode to continue';
     statusEl.className = 'pyodide-status error';
     console.error('[pyodide] init failed:', err);
-
-    // Switch UI to server mode
-    const radio = document.querySelector('input[name="execPath"][value="server"]');
-    if (radio) radio.checked = true;
-    state.executionPath = 'server';
-    updateUploadVisibility();
+    syncRunButton();
   }
 }
 
@@ -430,8 +438,7 @@ async function handleSubmit() {
 
 async function runClientSide(code) {
   if (!state.pyodideReady) {
-    // Stub: echo with notice when opened outside the FastAPI server
-    return `# [Demo mode — Pyodide not available]\n# Serve via FastAPI for full client-side execution.\n\n${code}`;
+    throw new Error('Pyodide is still loading — please wait.');
   }
 
   const py = state.pyodide;
@@ -602,6 +609,7 @@ function init() {
     radio.addEventListener('change', e => {
       state.executionPath = e.target.value;
       updateUploadVisibility();
+      syncRunButton();
     });
   });
 
@@ -630,6 +638,7 @@ function init() {
   });
 
   // Kick off Pyodide (non-blocking)
+  syncRunButton();
   initPyodide();
 }
 
