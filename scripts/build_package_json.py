@@ -32,7 +32,6 @@ PACKAGE_FILES = [
     "Renaming/__init__.py",
     "Renaming/renamer.py",
     "Utils/__init__.py",
-    "Utils/random_seeder.py",
 ]
 
 missing = [f for f in PACKAGE_FILES if not (REPO / f).exists()]

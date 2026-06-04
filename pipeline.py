@@ -1,5 +1,5 @@
 import ast
-import threading
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -23,9 +23,6 @@ from LoopObfuscation.ob_for import Ob_For
 from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Renaming.renamer import Renamer
 from NameTracker.naming import Naming
-from Utils.random_seeder import seeded
-
-_PIPELINE_LOCK = threading.RLock()
 
 DEFAULT_STAGE_ORDER = ["junk", "loops", "conditionals", "identities", "numbers", "renaming"]
 
@@ -74,36 +71,36 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
 
     stages = cfg.stage_order if cfg.stage_order is not None else DEFAULT_STAGE_ORDER
 
-    with _PIPELINE_LOCK:
-        with seeded(cfg.seed):
-            code = input_path.read_text(encoding="utf-8")
-            tree = ast.parse(code, mode="exec")
+    rng = random.Random(cfg.seed)
 
-            naming = Naming()
-            naming.analyze(tree)
+    code = input_path.read_text(encoding="utf-8")
+    tree = ast.parse(code, mode="exec")
 
-            for stage in stages:
-                if stage == "junk" and cfg.enable_junk and cfg.junk_strategies:
-                    selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in cfg.junk_strategies]
-                    tree = JunkInjector(naming, selected, cfg.junk_density).apply(tree)
+    naming = Naming()
+    naming.analyze(tree)
 
-                elif stage == "loops" and cfg.enable_loops:
-                    loop_cls = _resolve(LoopObfuscationStrategy._registry, cfg.loop_strategy, "loop")
-                    tree = Ob_For(naming, loop_cls).apply(tree)
+    for stage in stages:
+        if stage == "junk" and cfg.enable_junk and cfg.junk_strategies:
+            selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in cfg.junk_strategies]
+            tree = JunkInjector(naming, selected, cfg.junk_density, rng).apply(tree)
 
-                elif stage == "conditionals" and cfg.enable_conditionals and cfg.conditional_strategies:
-                    cond_selected = [_resolve(JunkConditionalStrategy._registry, k, "conditional") for k in cfg.conditional_strategies]
-                    tree = ConditionalInjector(naming, cond_selected, 1).apply(tree)
+        elif stage == "loops" and cfg.enable_loops:
+            loop_cls = _resolve(LoopObfuscationStrategy._registry, cfg.loop_strategy, "loop")
+            tree = Ob_For(naming, loop_cls, rng).apply(tree)
 
-                elif stage == "identities" and cfg.enable_identities:
-                    tree = IdentityFuncInjector(MixedIdentityStrategy(), cfg.identity_probability).apply(tree)
+        elif stage == "conditionals" and cfg.enable_conditionals and cfg.conditional_strategies:
+            cond_selected = [_resolve(JunkConditionalStrategy._registry, k, "conditional") for k in cfg.conditional_strategies]
+            tree = ConditionalInjector(naming, cond_selected, 1, rng).apply(tree)
 
-                elif stage == "numbers" and cfg.enable_numbers and cfg.number_strategies:
-                    for ns in cfg.number_strategies:
-                        tree = NumberObscurerInjector(naming, _resolve(NumberObscureStrategy._registry, ns, "number")).apply(tree)
+        elif stage == "identities" and cfg.enable_identities:
+            tree = IdentityFuncInjector(MixedIdentityStrategy(), cfg.identity_probability, rng).apply(tree)
 
-                elif stage == "renaming" and cfg.enable_renaming:
-                    tree = Renamer(naming.get_namespace()).apply(tree)
+        elif stage == "numbers" and cfg.enable_numbers and cfg.number_strategies:
+            for ns in cfg.number_strategies:
+                tree = NumberObscurerInjector(naming, _resolve(NumberObscureStrategy._registry, ns, "number"), rng).apply(tree)
 
-            tree = ast.fix_missing_locations(tree)
-            return ast.unparse(tree)
+        elif stage == "renaming" and cfg.enable_renaming:
+            tree = Renamer(naming.get_namespace(), rng).apply(tree)
+
+    tree = ast.fix_missing_locations(tree)
+    return ast.unparse(tree)
