@@ -24,7 +24,13 @@ pip install -r requirements.txt
 
 ## Testing
 
-There is no automated test suite. Manual verification:
+Run the automated round-trip test suite:
+```bash
+pip install -r requirements-dev.txt   # includes pytest
+pytest
+```
+
+Manual verification:
 ```bash
 python IO/input.py > original.out
 python IO/output.py > obfuscated.out
@@ -77,19 +83,18 @@ The API wraps pipeline execution in `_PIPELINE_LOCK` (threading lock) to prevent
 
 ## Active Development
 
-Planned work is tracked in `plans/`. Key plans:
+Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements.
 
-- `plans/plan-1-deploy/` — full deploy: frontend, hybrid Pyodide/Lambda execution, IaC (10 subplans, see `index.md`)
+Remaining plans:
+
 - `plans/plan-3-collatz-linear.md` — fix O(n²) loop index in `CollatzStrategy`
 - `plans/plan-4-collatz-seed.md` — brute-force seed determination for short Collatz loops
 - `plans/plan-import-obfuscation.md` — obfuscate `import` statements
 - `plans/plan-string-obfuscation.md` — obfuscate string literals
 - `plans/plan-bogus-functions.md` — inject dead functions at module level
 - `plans/plan-depth-size-guard.md` — input validation before `ast.parse()`
-- `plans/plan-testing.md` — automated round-trip test suite
-- `plans/plan-ui-improvements.md` — default client mode, working sliders, mobile layout
-- `plans/plan-pipeline-recipe.md` — add-step / duplicate UI, active-only recipe list (requires randomness fix)
-- `plans/plan-usability-docs.md` — welcome modal, custom strategy help + starter templates (requires randomness fix)
+- `plans/plan-pipeline-recipe.md` — add-step / duplicate UI, active-only recipe list
+- `plans/plan-usability-docs.md` — welcome modal, custom strategy help + starter templates
 
 ## Branch Convention
 
