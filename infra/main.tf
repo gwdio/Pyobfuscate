@@ -638,10 +638,9 @@ resource "aws_cloudfront_distribution" "main" {
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
 
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.reject_truncated.arn
-    }
+    # reject_truncated removed: accessing event.request.body triggers CloudFront
+    # body re-encoding which breaks the x-amz-content-sha256 OAC signature.
+    # Oversized body protection is handled by the Lambda handler instead.
 
     function_association {
       event_type   = "viewer-response"
