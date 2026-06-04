@@ -14,9 +14,10 @@ class ConditionalInjector(ast.NodeTransformer):
          - Replace the original statement with the returned wrapper.
     3. Provides `apply(tree)` to visit and fix locations.
     """
-    def __init__(self, naming, strategy_classes: List[Type[JunkConditionalStrategy]], passes: int = 1):
+    def __init__(self, naming, strategy_classes: List[Type[JunkConditionalStrategy]], passes: int, rng: random.Random):
         self.naming = naming
         self.passes = passes
+        self.rng = rng
         # instantiate strategies
         self.strategies = [cls() for cls in strategy_classes]
 
@@ -24,9 +25,9 @@ class ConditionalInjector(ast.NodeTransformer):
         new_body: List[ast.stmt] = []
         chance = 30 / self.passes / 100
         for stmt in body:
-            if random.random() < chance:
-                strat = random.choice(self.strategies)
-                wrapped = strat.wrap(stmt)
+            if self.rng.random() < chance:
+                strat = self.rng.choice(self.strategies)
+                wrapped = strat.wrap(stmt, self.rng)
                 # wrap returns a list of statements
                 new_body.extend(wrapped)
             else:

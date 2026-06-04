@@ -11,9 +11,10 @@ class Renamer(ast.NodeTransformer):
     3) Rewrite the entire AST, replacing all occurrences.
     """
 
-    def __init__(self, namespace: Set[str]):
+    def __init__(self, namespace: Set[str], rng: random.Random):
         # avoid colliding with any existing names
         self.namespace = set(namespace)
+        self.rng = rng
         self.to_rename: Set[str] = set()
         self.method_names: Set[str] = set()
         self.mapping: Dict[str, str] = {}
@@ -21,8 +22,8 @@ class Renamer(ast.NodeTransformer):
     def _generate_name(self) -> str:
         """Produce a valid Python identifier not in self.namespace or already mapped."""
         while True:
-            name = random.choice(string.ascii_letters + "_") + \
-                   "".join(random.choices(string.ascii_letters + string.digits + "_", k=7))
+            name = self.rng.choice(string.ascii_letters + "_") + \
+                   "".join(self.rng.choices(string.ascii_letters + string.digits + "_", k=7))
             if name.isidentifier() and name not in self.namespace and name not in self.mapping.values():
                 self.namespace.add(name)
                 return name
@@ -64,8 +65,8 @@ class Renamer(ast.NodeTransformer):
         # First pass: collect
         self.visit(tree)
 
-        # Build mapping
-        for old in self.to_rename:
+        # Build mapping (sorted for deterministic RNG consumption order)
+        for old in sorted(self.to_rename):
             self.mapping[old] = self._generate_name()
 
         # Restrict attribute rewriting to user-defined method names only,

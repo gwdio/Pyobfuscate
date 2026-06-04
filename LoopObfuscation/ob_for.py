@@ -5,17 +5,18 @@ from .obfuscation_strategies import PlainStrategy, CollatzStrategy
 
 
 class Ob_For:
-    def __init__(self, naming, strategy_class):
+    def __init__(self, naming, strategy_class, rng):
         """
         naming: your Naming instance
         strategy_class: the strategy class to use (e.g., PlainStrategy, CollatzStrategy)
         """
         self.naming = naming
+        self.rng = rng
         self.passes = []
 
         # Create your transformation units with naming context
         self.loop_unwrapper = LoopUnwrapper(naming)
-        self.iterable_conversion = ForToWhileGeneric(naming, strategy_class)
+        self.iterable_conversion = ForToWhileGeneric(naming, strategy_class, rng)
 
         # Append in order: transform first, then inject (if applicable)
         self.passes.append(self.loop_unwrapper)

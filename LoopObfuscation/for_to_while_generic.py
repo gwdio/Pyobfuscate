@@ -3,13 +3,14 @@ from typing import List, Optional, Tuple
 
 
 class ForToWhileGeneric(ast.NodeTransformer):
-    def __init__(self, naming, strategy_class):
+    def __init__(self, naming, strategy_class, rng):
         """
         naming: your Naming instance for unique name generation
         strategy_class: a class inheriting from LoopObfuscationStrategy
         """
         self.naming = naming
         self.strategy_class = strategy_class
+        self.rng = rng
         # Keep track of strategy instances to inject helpers later
         self._strategies: List = []
 
@@ -22,7 +23,7 @@ class ForToWhileGeneric(ast.NodeTransformer):
         start, stop, step = parsed
 
         # Instantiate the obfuscation strategy for this loop
-        strategy = self.strategy_class(self.naming, start, stop, step)
+        strategy = self.strategy_class(self.naming, start, stop, step, self.rng)
         self._strategies.append(strategy)
 
         # Rename original loop variable to strategy.loop_var throughout the body

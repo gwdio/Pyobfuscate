@@ -15,8 +15,9 @@ class NumberObscureStrategy:
         super().__init_subclass__(**kwargs)
         NumberObscureStrategy._registry[cls.__name__] = cls
 
-    def __init__(self, naming: Naming):
+    def __init__(self, naming: Naming, rng: random.Random):
         self.naming = naming
+        self.rng = rng
 
     def obfuscate(self, value: int) -> ast.expr:
         """
@@ -39,8 +40,8 @@ class TemplateNumberStrategy(NumberObscureStrategy):
     Use this as a starting point for your own strategies.
     """
 
-    def __init__(self, naming: Naming):
-        super().__init__(naming)
+    def __init__(self, naming: Naming, rng: random.Random):
+        super().__init__(naming, rng)
         # If you need a decoder helper, generate its name here:
         # self.decoder_name = naming.get_name("decode_num")
 
@@ -59,8 +60,8 @@ class SimpleFeistelNumberStrategy(NumberObscureStrategy):
     """
     MASK32 = 0xFFFFFFFF
 
-    def __init__(self, naming: Naming):
-        super().__init__(naming)
+    def __init__(self, naming: Naming, rng: random.Random):
+        super().__init__(naming, rng)
         self.rounds = 4
         # Preset 16-bit key
         self.key16 = 0b1011001011001011  # example fixed key
@@ -126,13 +127,13 @@ def {self.decoder_name}(x):
 class FeistelNumberStrategy(NumberObscureStrategy):
     MASK32 = 0xFFFFFFFF
 
-    def __init__(self, naming: Naming, rounds: int = 3):
-        super().__init__(naming)
+    def __init__(self, naming: Naming, rng: random.Random, rounds: int = 3):
+        super().__init__(naming, rng)
         self.rounds = rounds
         # 16-bit random odd multiplier (bijective mod 2^16)
-        self.salt_mul = random.getrandbits(16) | 1
+        self.salt_mul = self.rng.getrandbits(16) | 1
         # 16-bit random XOR salt
-        self.salt_xor = random.getrandbits(16) & 0xFFFF
+        self.salt_xor = self.rng.getrandbits(16) & 0xFFFF
         # modular inverse of salt_mul mod 2^16
         self.salt_mul_inv = pow(self.salt_mul, -1, 1 << 16)
         self.decoder_name = naming.get_name("decode_num")
@@ -204,15 +205,15 @@ class XorStringNumberStrategy(NumberObscureStrategy):
     Obfuscates an n-digit number by XORing each digit character with a random key string of equal length.
     The encoded format is <xor_result><key>, where key is appended so the decoder can extract it.
     """
-    def __init__(self, naming: Naming):
-        super().__init__(naming)
+    def __init__(self, naming: Naming, rng: random.Random):
+        super().__init__(naming, rng)
         self.decoder_name = naming.get_name("decode_num")
 
     def obfuscate(self, value: int) -> ast.expr:
         s = str(value)
         n = len(s)
         # generate random key string of same length
-        key_chars = [chr(random.getrandbits(8)) for _ in range(n)]
+        key_chars = [chr(self.rng.getrandbits(8)) for _ in range(n)]
         key = ''.join(key_chars)
         # xor each char
         xor_chars = [chr(ord(s[i]) ^ ord(key_chars[i])) for i in range(n)]
