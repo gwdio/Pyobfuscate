@@ -9,7 +9,6 @@ from pipeline import ObfuscationConfig, run_pipeline
 from Utils.input_guard import validate_input
 
 _TIMEOUT_SECONDS = 10
-# _ORIGIN_SECRET = os.environ.get("ORIGIN_SECRET")
 
 sys.setrecursionlimit(1000)
 
@@ -19,10 +18,6 @@ _BLOCKED_FIELDS = {"input_path", "output_path", "return_code"}
 
 def lambda_handler(event, context):
     try:
-        # headers = event.get("headers", {})
-        # if headers.get("x-origin-secret") != _ORIGIN_SECRET:
-        #     return _error(403, "Forbidden")
-
         http = event.get("requestContext", {}).get("http", {})
         method = http.get("method", "POST").upper()
 
