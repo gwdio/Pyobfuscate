@@ -9,7 +9,8 @@ TF_DIR   := infra
 
 help:
 	@echo "Dev"
-	@echo "  install        pip install -r requirements.txt"
+	@echo "  install        pip install -r requirements.txt  (prod deps)"
+	@echo "  install-dev    pip install -r requirements-dev.txt  (+ pytest)"
 	@echo "  serve          uvicorn app:app --reload"
 	@echo "  cli            run obfuscate.py interactively"
 	@echo "  verify         diff IO/input.py vs IO/output.py runtime output"
@@ -33,6 +34,9 @@ help:
 
 install:
 	pip install -r requirements.txt
+
+install-dev:
+	pip install -r requirements-dev.txt
 
 serve:
 	$(UVICORN) app:app --reload

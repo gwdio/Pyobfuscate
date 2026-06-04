@@ -57,7 +57,6 @@ locals {
     "Renaming/__init__.py",
     "Renaming/renamer.py",
     "Utils/__init__.py",
-    "Utils/random_seeder.py",
   ]
 }
 

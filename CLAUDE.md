@@ -70,7 +70,6 @@ Key strategy families:
 | `Injectors/conditional_injector.py` | Wraps statements in opaque always-true predicates |
 | `LoopObfuscation/ob_for.py` | Orchestrates for→while: unwraps nested loops, then applies strategy |
 | `Encryption/number_obscurer.py` | Visits `ast.Constant` int nodes and replaces with encoded expressions |
-| `Utils/random_seeder.py` | `seeded(seed)` context manager for reproducible/deterministic output |
 
 ### Concurrency
 
