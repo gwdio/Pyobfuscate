@@ -291,13 +291,16 @@ async function initPyodide() {
   const statusEl = $('pyodide-status');
   try {
     if (typeof loadPyodide === 'undefined') throw new Error('Pyodide script not loaded');
+    console.log('[pyodide] starting loadPyodide()');
     statusEl.textContent = 'Loading Pyodide…';
     statusEl.className = 'pyodide-status loading';
 
     state.pyodide = await loadPyodide();
+    console.log('[pyodide] loadPyodide() done');
     statusEl.textContent = 'Loading package…';
 
     await loadPackage();
+    console.log('[pyodide] loadPackage() done');
 
     state.pyodideReady = true;
     statusEl.textContent = 'Client ready';
@@ -306,7 +309,7 @@ async function initPyodide() {
     state.pyodideError = err.message;
     statusEl.textContent = 'Pyodide unavailable — server mode only';
     statusEl.className = 'pyodide-status error';
-    console.warn('Pyodide init failed:', err);
+    console.error('[pyodide] init failed:', err);
 
     // Switch UI to server mode
     const radio = document.querySelector('input[name="execPath"][value="server"]');
@@ -317,9 +320,17 @@ async function initPyodide() {
 }
 
 async function loadPackage() {
+  console.log('[pyodide] fetching /package.json');
   const resp = await fetch('/package.json');
-  if (!resp.ok) throw new Error(`/package returned ${resp.status}`);
-  const files = await resp.json();
+  console.log('[pyodide] /package.json status:', resp.status, 'content-type:', resp.headers.get('content-type'));
+  if (!resp.ok) throw new Error(`/package.json returned ${resp.status}`);
+  let files;
+  try {
+    files = await resp.json();
+    console.log('[pyodide] /package.json parsed OK, file count:', Object.keys(files).length);
+  } catch {
+    throw new Error(`/package.json returned non-JSON (content-type: ${resp.headers.get('content-type')})`);
+  }
 
   const py = state.pyodide;
 
@@ -341,12 +352,14 @@ async function loadPackage() {
   }
 
   // Add to sys.path and trigger all registry registrations
+  console.log('[pyodide] importing pipeline');
   await py.runPythonAsync(`
 import sys
 if '/home/pyodide' not in sys.path:
     sys.path.insert(0, '/home/pyodide')
 import pipeline
 `);
+  console.log('[pyodide] pipeline imported OK');
 }
 
 // ============================================================
@@ -461,13 +474,26 @@ run_pipeline(cfg)
 async function runServerSide(code) {
   const payload = JSON.stringify({ source: code, ...buildConfig() });
 
+  const payloadBytes = new TextEncoder().encode(payload);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', payloadBytes);
+  const hashHex = Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+
   const resp = await fetch('/obfuscate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-amz-content-sha256': hashHex,
+    },
     body: payload,
   });
 
-  const data = await resp.json();
+  let data;
+  try {
+    data = await resp.json();
+  } catch {
+    throw new Error(`Server error ${resp.status}: unexpected non-JSON response`);
+  }
   if (!resp.ok) throw new Error(data.error ?? `Server error ${resp.status}`);
   return data.code;
 }

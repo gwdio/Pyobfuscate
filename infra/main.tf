@@ -5,8 +5,21 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 }
+
+# resource "random_password" "origin_secret" {
+#   length  = 32
+#   special = false
+# }
 
 provider "aws" {
   region  = var.aws_region
@@ -18,7 +31,11 @@ locals {
   frontend_dir = "${path.module}/../frontend"
 
   # Strip "https://" and trailing "/" from the Function URL to get a bare domain
-  lambda_domain = trim(replace(aws_lambda_function_url.obfuscator.function_url, "https://", ""), "/")
+  lambda_domain       = trim(replace(aws_lambda_function_url.obfuscator.function_url, "https://", ""), "/")
+  health_check_domain      = trim(replace(aws_lambda_function_url.health_check.function_url, "https://", ""), "/")
+  diag_iam_only_domain     = trim(replace(aws_lambda_function_url.diag_iam_only.function_url, "https://", ""), "/")
+  diag_source_arn_domain   = trim(replace(aws_lambda_function_url.diag_source_arn_only.function_url, "https://", ""), "/")
+  diag_no_protection_domain = trim(replace(aws_lambda_function_url.diag_no_protection.function_url, "https://", ""), "/")
 
   mime_types = {
     ".html" = "text/html"
@@ -28,6 +45,50 @@ locals {
     ".ico"  = "image/x-icon"
     ".png"  = "image/png"
     ".svg"  = "image/svg+xml"
+  }
+
+  # Python source files bundled for Pyodide (client-side execution)
+  pyodide_package_files = [
+    "pipeline.py",
+    "Encryption/__init__.py",
+    "Encryption/number_obscure_strategies.py",
+    "Encryption/number_obscurer.py",
+    "Injectors/__init__.py",
+    "Injectors/conditional_injector.py",
+    "Injectors/identity_injector.py",
+    "Injectors/identity_strategies.py",
+    "Injectors/inject_junk.py",
+    "Injectors/junk_conditional_strategies.py",
+    "Injectors/junk_strategies.py",
+    "LoopObfuscation/__init__.py",
+    "LoopObfuscation/for_to_while_generic.py",
+    "LoopObfuscation/loop_simplifier.py",
+    "LoopObfuscation/ob_for.py",
+    "LoopObfuscation/obfuscation_strategies.py",
+    "NameTracker/__init__.py",
+    "NameTracker/naming.py",
+    "Renaming/__init__.py",
+    "Renaming/renamer.py",
+    "Utils/__init__.py",
+    "Utils/random_seeder.py",
+  ]
+}
+
+# ── Health-check Lambda inline zip ───────────────────────────────────────────
+
+data "archive_file" "health_check" {
+  type        = "zip"
+  output_path = "${path.module}/../dist/health_check.zip"
+  source {
+    content  = <<-PYTHON
+      def lambda_handler(event, context):
+          return {
+              "statusCode": 200,
+              "headers": {"Content-Type": "application/json"},
+              "body": '{"ok":true,"msg":"OAC wiring verified"}'
+          }
+    PYTHON
+    filename = "lambda_handler.py"
   }
 }
 
@@ -65,25 +126,163 @@ resource "aws_lambda_function" "obfuscator" {
   timeout     = 10
   memory_size = 256
   description = "pyobfuscate engine — server execution path"
+
+  # environment {
+  #   variables = {
+  #     ORIGIN_SECRET = random_password.origin_secret.result
+  #   }
+  # }
 }
 
-# AWS_IAM auth — only CloudFront can invoke via the OAC + resource policy below
 resource "aws_lambda_function_url" "obfuscator" {
   function_name      = aws_lambda_function.obfuscator.function_name
   authorization_type = "AWS_IAM"
 }
 
-resource "aws_lambda_permission" "cloudfront_invoke" {
-  statement_id  = "AllowCloudFrontServicePrincipal"
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/pyobfuscate"
+  retention_in_days = 7
+}
+
+resource "aws_lambda_permission" "cloudfront" {
+  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
   action        = "lambda:InvokeFunctionUrl"
   function_name = aws_lambda_function.obfuscator.function_name
   principal     = "cloudfront.amazonaws.com"
   source_arn    = aws_cloudfront_distribution.main.arn
 }
 
-resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/pyobfuscate"
-  retention_in_days = 7
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.obfuscator.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
+}
+
+# ── Health-check Lambda ───────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "health_check" {
+  filename         = data.archive_file.health_check.output_path
+  source_code_hash = data.archive_file.health_check.output_base64sha256
+  function_name    = "pyobfuscate-health-check"
+  role             = aws_iam_role.lambda.arn
+  handler          = "lambda_handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 5
+}
+
+resource "aws_lambda_function_url" "health_check" {
+  function_name      = aws_lambda_function.health_check.function_name
+  authorization_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "health_check_cloudfront" {
+  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.health_check.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
+}
+
+resource "aws_lambda_permission" "health_check_cloudfront_invoke" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.health_check.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
+}
+
+# ── Diagnostic Lambdas (OAC permission isolation) ────────────────────────────
+# Variant A: AWS_IAM auth, no source_arn — any CloudFront distribution can call
+resource "aws_lambda_function" "diag_iam_only" {
+  filename         = data.archive_file.health_check.output_path
+  source_code_hash = data.archive_file.health_check.output_base64sha256
+  function_name    = "pyobfuscate-diag-iam-only"
+  role             = aws_iam_role.lambda.arn
+  handler          = "lambda_handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 5
+}
+
+resource "aws_lambda_function_url" "diag_iam_only" {
+  function_name      = aws_lambda_function.diag_iam_only.function_name
+  authorization_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "diag_iam_only_url" {
+  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.diag_iam_only.function_name
+  principal     = "cloudfront.amazonaws.com"
+}
+
+resource "aws_lambda_permission" "diag_iam_only_invoke" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.diag_iam_only.function_name
+  principal     = "cloudfront.amazonaws.com"
+}
+
+# Variant B: AWS_IAM auth, source_arn scoped — InvokeFunctionUrl only (no InvokeFunction)
+resource "aws_lambda_function" "diag_source_arn_only" {
+  filename         = data.archive_file.health_check.output_path
+  source_code_hash = data.archive_file.health_check.output_base64sha256
+  function_name    = "pyobfuscate-diag-source-arn-only"
+  role             = aws_iam_role.lambda.arn
+  handler          = "lambda_handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 5
+}
+
+resource "aws_lambda_function_url" "diag_source_arn_only" {
+  function_name      = aws_lambda_function.diag_source_arn_only.function_name
+  authorization_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "diag_source_arn_only_url" {
+  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.diag_source_arn_only.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
+}
+
+# Variant C: NONE auth — no IAM, publicly accessible URL
+resource "aws_lambda_function" "diag_no_protection" {
+  filename         = data.archive_file.health_check.output_path
+  source_code_hash = data.archive_file.health_check.output_base64sha256
+  function_name    = "pyobfuscate-diag-no-protection"
+  role             = aws_iam_role.lambda.arn
+  handler          = "lambda_handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 5
+}
+
+resource "aws_lambda_function_url" "diag_no_protection" {
+  function_name      = aws_lambda_function.diag_no_protection.function_name
+  authorization_type = "NONE"
+}
+
+# ── S3 CloudFront access log bucket ──────────────────────────────────────────
+
+resource "aws_s3_bucket" "cf_logs" {
+  bucket_prefix = "pyobfuscate-cf-logs-"
+  force_destroy = true
+}
+
+# CloudFront requires ACLs to write access logs
+resource "aws_s3_bucket_ownership_controls" "cf_logs" {
+  bucket = aws_s3_bucket.cf_logs.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_acl" "cf_logs" {
+  depends_on = [aws_s3_bucket_ownership_controls.cf_logs]
+  bucket     = aws_s3_bucket.cf_logs.id
+  acl        = "private"
 }
 
 # ── S3 frontend bucket ────────────────────────────────────────────────────────
@@ -112,6 +311,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
 
 # ── CloudFront OACs ───────────────────────────────────────────────────────────
 
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  name                              = "pyobfuscate-lambda-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "pyobfuscate-frontend-oac"
   origin_access_control_origin_type = "s3"
@@ -119,12 +325,27 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
-resource "aws_cloudfront_origin_access_control" "lambda" {
-  name                              = "pyobfuscate-lambda-oac"
+resource "aws_cloudfront_origin_access_control" "health_check" {
+  name                              = "pyobfuscate-health-check-oac"
   origin_access_control_origin_type = "lambda"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
+
+resource "aws_cloudfront_origin_access_control" "diag_iam_only" {
+  name                              = "pyobfuscate-diag-iam-only-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_origin_access_control" "diag_source_arn_only" {
+  name                              = "pyobfuscate-diag-source-arn-only-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 
 # ── S3 bucket policy (CloudFront OAC only) ───────────────────────────────────
 
@@ -149,6 +370,82 @@ resource "aws_s3_bucket_policy" "frontend" {
   policy = data.aws_iam_policy_document.s3_cloudfront.json
 }
 
+# ── CloudFront Function: /obfuscate viewer-response — convert stray HTML to JSON ─
+
+# custom_error_response is distribution-wide and cannot be scoped to a specific origin.
+# If it fires for /obfuscate (e.g. an S3 403 mapped to index.html), the viewer-response
+# function detects the HTML content-type and replaces the body with a generic JSON error,
+# so the browser always gets application/json on this path.
+resource "aws_cloudfront_function" "obfuscate_error_response" {
+  name    = "pyobfuscate-obfuscate-error-response"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var ct = (event.response.headers['content-type'] || {}).value || '';
+      if (ct.indexOf('text/html') === 0) {
+        return {
+          statusCode: 502,
+          statusDescription: 'Bad Gateway',
+          headers: { 'content-type': { value: 'application/json' } },
+          body: { encoding: 'text', data: '{"error":"Processing error"}' }
+        };
+      }
+      return event.response;
+    }
+  EOF
+}
+
+# ── CloudFront Function: reject truncated bodies ─────────────────────────────
+
+resource "aws_cloudfront_function" "reject_truncated" {
+  name    = "pyobfuscate-reject-truncated"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var body = event.request.body;
+      if (body && body.inputTruncated) {
+        return {
+          statusCode: 413,
+          statusDescription: 'Payload Too Large',
+          headers: { 'content-type': { value: 'application/json' } },
+          body: { encoding: 'text', data: '{"error":"Payload too large"}' }
+        };
+      }
+      return event.request;
+    }
+  EOF
+}
+
+# ── CloudFront response headers policy ───────────────────────────────────────
+
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name = "pyobfuscate-security-headers"
+
+  security_headers_config {
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    content_security_policy {
+      # Pyodide (client path) loads JS and WASM from cdn.jsdelivr.net and
+      # creates blob: workers at runtime.
+      content_security_policy = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net; worker-src blob:"
+      override                = true
+    }
+  }
+}
+
 # ── Managed CloudFront policies (looked up by name) ──────────────────────────
 
 data "aws_cloudfront_cache_policy" "optimized" {
@@ -163,6 +460,26 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
 }
 
+# OAC owns the Authorization header — this policy must not forward it
+resource "aws_cloudfront_origin_request_policy" "lambda" {
+  name = "pyobfuscate-lambda-origin-request"
+
+  headers_config {
+    header_behavior = "allExcept"
+    headers {
+      items = ["authorization", "host"]
+    }
+  }
+
+  cookies_config {
+    cookie_behavior = "all"
+  }
+
+  query_strings_config {
+    query_string_behavior = "all"
+  }
+}
+
 # ── CloudFront distribution ───────────────────────────────────────────────────
 
 resource "aws_cloudfront_distribution" "main" {
@@ -172,6 +489,61 @@ resource "aws_cloudfront_distribution" "main" {
   price_class         = "PriceClass_100"
   aliases             = var.domain_name != null ? [var.domain_name] : []
 
+  logging_config {
+    bucket          = aws_s3_bucket.cf_logs.bucket_domain_name
+    include_cookies = false
+    prefix          = "cf/"
+  }
+
+  # Health-check Lambda origin
+  origin {
+    domain_name              = local.health_check_domain
+    origin_id                = "lambda-health-check"
+    origin_access_control_id = aws_cloudfront_origin_access_control.health_check.id
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # Diagnostic origins
+  origin {
+    domain_name              = local.diag_iam_only_domain
+    origin_id                = "lambda-diag-iam-only"
+    origin_access_control_id = aws_cloudfront_origin_access_control.diag_iam_only.id
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  origin {
+    domain_name              = local.diag_source_arn_domain
+    origin_id                = "lambda-diag-source-arn"
+    origin_access_control_id = aws_cloudfront_origin_access_control.diag_source_arn_only.id
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  origin {
+    domain_name = local.diag_no_protection_domain
+    origin_id   = "lambda-diag-no-protection"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   # S3 origin (frontend)
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -179,11 +551,16 @@ resource "aws_cloudfront_distribution" "main" {
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
-  # Lambda Function URL origin — OAC signs requests with SigV4 (AWS_IAM required)
+  # Lambda Function URL origin — OAC signs with SigV4 (proves the request is from CloudFront).
+  # X-Origin-Secret further restricts to this specific distribution; Lambda validates both.
   origin {
     domain_name              = local.lambda_domain
     origin_id                = "lambda-obfuscator"
     origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    # custom_header {
+    #   name  = "X-Origin-Secret"
+    #   value = random_password.origin_secret.result
+    # }
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -194,25 +571,85 @@ resource "aws_cloudfront_distribution" "main" {
 
   # Default behaviour → S3 (frontend)
   default_cache_behavior {
-    target_origin_id       = "s3-frontend"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    cache_policy_id        = data.aws_cloudfront_cache_policy.optimized.id
+    target_origin_id          = "s3-frontend"
+    viewer_protocol_policy    = "redirect-to-https"
+    allowed_methods           = ["GET", "HEAD"]
+    cached_methods            = ["GET", "HEAD"]
+    compress                  = true
+    cache_policy_id           = data.aws_cloudfront_cache_policy.optimized.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Diagnostic behaviors
+  ordered_cache_behavior {
+    path_pattern             = "/diag-iam"
+    target_origin_id         = "lambda-diag-iam-only"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda.id
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/diag-source-arn"
+    target_origin_id         = "lambda-diag-source-arn"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda.id
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/diag-none"
+    target_origin_id         = "lambda-diag-no-protection"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda.id
+  }
+
+  # /health → health-check Lambda (GET only, OAC diagnostic)
+  ordered_cache_behavior {
+    path_pattern             = "/health"
+    target_origin_id         = "lambda-health-check"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    compress                 = true
+    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda.id
   }
 
   # /obfuscate → Lambda
   ordered_cache_behavior {
-    path_pattern             = "/obfuscate"
-    target_origin_id         = "lambda-obfuscator"
-    viewer_protocol_policy   = "redirect-to-https"
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
-    compress                 = true
-    cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    path_pattern               = "/obfuscate"
+    target_origin_id           = "lambda-obfuscator"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.reject_truncated.arn
+    }
+
+    function_association {
+      event_type   = "viewer-response"
+      function_arn = aws_cloudfront_function.obfuscate_error_response.arn
+    }
   }
+
+  # custom_error_response temporarily removed for debugging — raw 403/404 pass through.
 
   viewer_certificate {
     cloudfront_default_certificate = var.certificate_arn == null
@@ -238,6 +675,20 @@ resource "aws_s3_object" "frontend" {
   source       = "${local.frontend_dir}/${each.value}"
   etag         = filemd5("${local.frontend_dir}/${each.value}")
   content_type = lookup(local.mime_types, try(regex("\\.[^.]+$", each.value), ""), "application/octet-stream")
+}
+
+# package.json for Pyodide — built at apply time from Python sources, served from S3.
+# Pyodide path is fully independent of Lambda.
+resource "aws_s3_object" "package_json" {
+  bucket       = aws_s3_bucket.frontend.id
+  key          = "package.json"
+  content_type = "application/json"
+  content = jsonencode({
+    for f in local.pyodide_package_files : f => file("${path.module}/../${f}")
+  })
+  etag = md5(jsonencode({
+    for f in local.pyodide_package_files : f => file("${path.module}/../${f}")
+  }))
 }
 
 # ── Alerts ───────────────────────────────────────────────────────────────────
