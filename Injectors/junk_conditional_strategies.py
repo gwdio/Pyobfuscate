@@ -7,14 +7,20 @@ class JunkConditionalStrategy:
     Interface for junk conditional strategies.
     Must implement wrap(stmt: ast.stmt) -> List[ast.stmt].
     """
-    def wrap(self, stmt: ast.stmt) -> List[ast.stmt]:
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        JunkConditionalStrategy._registry[cls.__name__] = cls
+
+    def wrap(self, stmt: ast.stmt, rng: random.Random) -> List[ast.stmt]:
         raise NotImplementedError
 
 class ConstantTrueStrategy(JunkConditionalStrategy):
     """
     Wraps a statement in `if True: ...`.
     """
-    def wrap(self, stmt: ast.stmt) -> List[ast.stmt]:
+    def wrap(self, stmt: ast.stmt, rng: random.Random) -> List[ast.stmt]:
         return [
             ast.If(
                 test=ast.Constant(value=True),
@@ -28,7 +34,7 @@ class ConstantFalseStrategy(JunkConditionalStrategy):
     Wraps a statement in `if False: <garbage> else: <stmt>`.
     Uses a dummy garbage pass.
     """
-    def wrap(self, stmt: ast.stmt) -> List[ast.stmt]:
+    def wrap(self, stmt: ast.stmt, rng: random.Random) -> List[ast.stmt]:
         garbage = ast.Pass()
         return [
             ast.If(
@@ -45,15 +51,15 @@ class RandomConditionalStrategy(JunkConditionalStrategy):
     Generates either a complex truthy or falsy expression randomly.
     """
 
-    def wrap(self, stmt: ast.stmt) -> List[ast.stmt]:
-        truth = random.random() < 0.5
-        test = self._make_test(truth)
+    def wrap(self, stmt: ast.stmt, rng: random.Random) -> List[ast.stmt]:
+        truth = rng.random() < 0.5
+        test = self._make_test(truth, rng)
         if truth:
             return [ast.If(test=test, body=[stmt], orelse=[])]
         else:
             return [ast.If(test=test, body=[ast.Pass()], orelse=[stmt])]
 
-    def _make_test(self, truth: bool) -> ast.expr:
+    def _make_test(self, truth: bool, rng: random.Random) -> ast.expr:
         # Always-truthy patterns
         nested_list = ast.List(
             elts=[ast.List(elts=[ast.Constant(1)], ctx=ast.Load()),
@@ -96,4 +102,4 @@ class RandomConditionalStrategy(JunkConditionalStrategy):
             )
             options = [const_false, compare_false, unary_false]
 
-        return random.choice(options)
+        return rng.choice(options)

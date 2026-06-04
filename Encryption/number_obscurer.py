@@ -9,7 +9,7 @@ class NumberObscurerInjector(ast.NodeTransformer):
     expression provided by a NumberObscureStrategy, and then injects the
     strategy's decoder if it has one.
     """
-    def __init__(self, naming, strategy_class: Type[NumberObscureStrategy]):
+    def __init__(self, naming, strategy_class: Type[NumberObscureStrategy], rng):
         """
         naming: your shared Naming instance
         strategy_class: a subclass of NumberObscureStrategy
@@ -17,7 +17,7 @@ class NumberObscurerInjector(ast.NodeTransformer):
         """
         self.naming = naming
         # injector is now responsible for instantiation
-        self.strategy = strategy_class(naming)
+        self.strategy = strategy_class(naming, rng)
 
     def visit_Constant(self, node: ast.Constant) -> ast.AST:
         # Only replace integer literals

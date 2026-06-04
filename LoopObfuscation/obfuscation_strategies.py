@@ -7,11 +7,18 @@ class LoopObfuscationStrategy:
     Abstract base for obfuscation strategies for ForToWhileGeneric.
     Provides default loop_var generation and hooks for AST snippet generation and helper injection.
     """
-    def __init__(self, naming, start: int, stop: int, step: int):
+    _registry: dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        LoopObfuscationStrategy._registry[cls.__name__] = cls
+
+    def __init__(self, naming, start: int, stop: int, step: int, rng: random.Random):
         self.naming = naming
         self.start = start
         self.stop = stop
         self.step = step
+        self.rng = rng
         # Every strategy gets its own unique loop variable name
         self.loop_var = naming.get_name('i')
 
@@ -38,8 +45,8 @@ class PlainStrategy(LoopObfuscationStrategy):
     """
     Implements a clean, non-obfuscated for->while strategy.
     """
-    def __init__(self, naming, start: int, stop: int, step: int):
-        super().__init__(naming, start, stop, step)
+    def __init__(self, naming, start: int, stop: int, step: int, rng: random.Random):
+        super().__init__(naming, start, stop, step, rng)
         # loop_var provided by base class
 
     def get_initial(self) -> List[ast.stmt]:
@@ -80,17 +87,17 @@ class CollatzStrategy(LoopObfuscationStrategy):
     """
     Implements Collatz-based loop obfuscation: transforms for->while with Collatz index resolution.
     """
-    def __init__(self, naming, start: int, stop: int, step: int):
-        super().__init__(naming, start, stop, step)
+    def __init__(self, naming, start: int, stop: int, step: int, rng: random.Random):
+        super().__init__(naming, start, stop, step, rng)
         # Unique variables for this loop (loop_var provided by base)
         self.a_var = naming.get_name('a')
         self.b_var = naming.get_name('b')
         self.num_var = naming.get_name('num')
         # Collatz parameters
-        self.a = random.choice([3, 5])
+        self.a = self.rng.choice([3, 5])
         b_choices = [x for x in [-1, 1, 3, 5, 7, 11] if x != self.a]
-        self.b = random.choice(b_choices)
-        self.seed = random.randint(19, 97)
+        self.b = self.rng.choice(b_choices)
+        self.seed = self.rng.randint(19, 97)
         # Calculate number of iterations
         self.n = max(0, (self.stop - self.start + (self.step - 1 if self.step > 0 else -(self.step + 1))) // abs(self.step))
         # Compute target state via forward Collatz
@@ -102,7 +109,7 @@ class CollatzStrategy(LoopObfuscationStrategy):
         for _ in range(n):
             if ((seed - b) % a == 0
                and ((seed - b) // a) % 2 == 1
-               and random.random() > 0.95
+               and self.rng.random() < 0.95
                and seed not in {2,4,8,16,32,40,1312}):
                 seed = (seed - b) // a
             else:

@@ -17,3 +17,13 @@ Thumbs.db
 # Logs, temp files, etc.
 *.log
 *.tmp
+
+# Build artifacts
+dist/
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/*.tfplan
+infra/terraform.tfvars

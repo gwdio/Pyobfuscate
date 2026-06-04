@@ -15,11 +15,12 @@ class JunkInjector(ast.NodeTransformer):
          inject junk AST nodes.
     4. After all injections, declare the generated junk vars at top of module.
     """
-    def __init__(self, naming, strategy_classes: List[Type[JunkInjectionStrategy]], passes: int = 1):
+    def __init__(self, naming, strategy_classes: List[Type[JunkInjectionStrategy]], passes: int, rng: random.Random):
         self.naming = naming
         self.passes = passes
+        self.rng = rng
         # generate 3–5 junk variable names upfront
-        num_vars = random.randint(3, 5)
+        num_vars = self.rng.randint(3, 5)
         self.junk_vars = [naming.get_name('junk') for _ in range(num_vars)]
         # instantiate strategies, passing junk_vars into each
         self.strategies = [cls(self.junk_vars) for cls in strategy_classes]
@@ -30,20 +31,24 @@ class JunkInjector(ast.NodeTransformer):
         for stmt in body:
             # before stmt
             for strat in self.strategies:
-                if random.random() < chance:
-                    junk = strat.get_junk()
+                if self.rng.random() < chance:
+                    junk = strat.get_junk(self.rng)
                     new_body.extend(junk)
             new_body.append(stmt)
             # after stmt
             for strat in self.strategies:
-                if random.random() < chance:
-                    junk = strat.get_junk()
+                if self.rng.random() < chance:
+                    junk = strat.get_junk(self.rng)
                     new_body.extend(junk)
         return new_body
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self.generic_visit(node)
         node.body = self._inject_in_body(node.body)
+        # Junk vars are declared at module level; without an explicit `global`
+        # declaration, any assignment inside a function makes Python treat them
+        # as local, causing UnboundLocalError on the read side of `junk0 = junk0 * ...`.
+        node.body = [ast.Global(names=list(self.junk_vars))] + node.body
         return node
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
