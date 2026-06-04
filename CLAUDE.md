@@ -88,6 +88,9 @@ Planned work is tracked in `plans/`. Key plans:
 - `plans/plan-bogus-functions.md` — inject dead functions at module level
 - `plans/plan-depth-size-guard.md` — input validation before `ast.parse()`
 - `plans/plan-testing.md` — automated round-trip test suite
+- `plans/plan-ui-improvements.md` — default client mode, working sliders, mobile layout
+- `plans/plan-pipeline-recipe.md` — add-step / duplicate UI, active-only recipe list (requires randomness fix)
+- `plans/plan-usability-docs.md` — welcome modal, custom strategy help + starter templates (requires randomness fix)
 
 ## Branch Convention
 
