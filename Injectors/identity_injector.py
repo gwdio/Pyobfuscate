@@ -16,6 +16,10 @@ class IdentityFuncInjector(ast.NodeTransformer):
         self.chance = chance
         self.rng = rng
 
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> ast.AST:
+        # F-string internals must stay as Constant/FormattedValue — don't transform inside
+        return node
+
     def visit_Name(self, node: ast.Name) -> ast.AST:
         # Leave assignments alone; only wrap loads and constants
         if isinstance(node.ctx, ast.Load) and self.rng.random() < self.chance:

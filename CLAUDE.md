@@ -83,17 +83,15 @@ The API wraps pipeline execution in `_PIPELINE_LOCK` (threading lock) to prevent
 
 ## Active Development
 
-Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe.
+Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe, usability-docs, plan-3-collatz-linear.
 
 Remaining plans:
 
-- `plans/plan-3-collatz-linear.md` — fix O(n²) loop index in `CollatzStrategy`
 - `plans/plan-4-collatz-seed.md` — brute-force seed determination for short Collatz loops
 - `plans/plan-import-obfuscation.md` — obfuscate `import` statements
 - `plans/plan-string-obfuscation.md` — obfuscate string literals
 - `plans/plan-bogus-functions.md` — inject dead functions at module level
 - `plans/plan-depth-size-guard.md` — input validation before `ast.parse()`
-- `plans/plan-usability-docs.md` — welcome modal, custom strategy help + starter templates
 
 ## Branch Convention
 

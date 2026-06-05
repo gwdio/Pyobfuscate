@@ -102,7 +102,8 @@ class CollatzStrategy(LoopObfuscationStrategy):
         self.n = max(0, (self.stop - self.start + (self.step - 1 if self.step > 0 else -(self.step + 1))) // abs(self.step))
         # Compute target state via forward Collatz
         self.target = self._collatz_forward(self.a, self.b, self.seed, self.n)
-        # Prepare helper function name
+        # Plain counter for O(1) index derivation per iteration
+        self.idx_var = naming.get_name('idx')
         self.resolve_name = naming.get_name('resolve_collatz')
 
     def _collatz_forward(self, a: int, b: int, seed: int, n: int) -> int:
@@ -117,10 +118,22 @@ class CollatzStrategy(LoopObfuscationStrategy):
         return seed
 
     def get_initial(self) -> List[ast.stmt]:
+        resolve_call = ast.Call(
+            func=ast.Name(id=self.resolve_name, ctx=ast.Load()),
+            args=[
+                ast.Name(id=self.a_var, ctx=ast.Load()),
+                ast.Name(id=self.b_var, ctx=ast.Load()),
+                ast.Name(id=self.num_var, ctx=ast.Load()),
+                ast.Constant(value=self.target),
+            ],
+            keywords=[]
+        )
+        idx_init = resolve_call
         return [
             ast.Assign(targets=[ast.Name(id=self.a_var, ctx=ast.Store())], value=ast.Constant(value=self.a)),
             ast.Assign(targets=[ast.Name(id=self.b_var, ctx=ast.Store())], value=ast.Constant(value=self.b)),
-            ast.Assign(targets=[ast.Name(id=self.num_var, ctx=ast.Store())], value=ast.Constant(value=self.target))
+            ast.Assign(targets=[ast.Name(id=self.num_var, ctx=ast.Store())], value=ast.Constant(value=self.target)),
+            ast.Assign(targets=[ast.Name(id=self.idx_var, ctx=ast.Store())], value=idx_init),
         ]
 
     def get_condition(self) -> ast.expr:
@@ -134,16 +147,7 @@ class CollatzStrategy(LoopObfuscationStrategy):
         return [
             ast.Assign(
                 targets=[ast.Name(id=self.loop_var, ctx=ast.Store())],
-                value=ast.Call(
-                    func=ast.Name(id=self.resolve_name, ctx=ast.Load()),
-                    args=[
-                        ast.Name(id=self.a_var, ctx=ast.Load()),
-                        ast.Name(id=self.b_var, ctx=ast.Load()),
-                        ast.Name(id=self.num_var, ctx=ast.Load()),
-                        ast.Constant(value=self.target)
-                    ],
-                    keywords=[]
-                )
+                value=ast.Name(id=self.idx_var, ctx=ast.Load()),
             )
         ]
 
@@ -171,11 +175,15 @@ class CollatzStrategy(LoopObfuscationStrategy):
                         )
                     )
                 ]
-            )
+            ),
+            ast.AugAssign(
+                target=ast.Name(id=self.idx_var, ctx=ast.Store()),
+                op=ast.Add() if self.step > 0 else ast.Sub(),
+                value=ast.Constant(value=abs(self.step)),
+            ),
         ]
 
     def inject_functions(self, tree: ast.Module) -> ast.Module:
-        # Inject the resolve_collatz helper at module top
         func_def = ast.FunctionDef(
             name=self.resolve_name,
             args=ast.arguments(
