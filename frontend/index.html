@@ -19,6 +19,7 @@
         <span>Server (Lambda)</span>
       </label>
     </div>
+    <button id="help-btn" class="help-btn" title="Help / About">?</button>
     <div id="pyodide-status" class="pyodide-status loading">Loading Pyodide…</div>
   </header>
 
@@ -46,6 +47,10 @@
           <input type="file" id="custom-upload" accept=".py">
           <div id="upload-status" class="upload-status"></div>
         </div>
+        <details id="template-details" class="template-details">
+          <summary>View starter templates</summary>
+          <div id="template-content" class="template-content"></div>
+        </details>
       </section>
 
       <button id="submit-btn" class="btn-primary">Obfuscate</button>
@@ -61,6 +66,33 @@
       <div id="error-msg" class="error-msg"></div>
     </div>
   </main>
+
+  <div id="welcome-modal" class="modal-overlay" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span class="modal-title">pyobfuscate</span>
+        <button id="welcome-close" class="modal-close" title="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-pitch">The first static, logic-level Python obfuscator that runs entirely in your browser.</p>
+        <ol class="modal-steps">
+          <li>Paste Python source code into the <strong>Input</strong> panel.</li>
+          <li>Configure the <strong>Pipeline</strong> — enable, disable, or reorder stages.</li>
+          <li>Click <strong>Obfuscate</strong> (or press <kbd>Ctrl+Enter</kbd>).</li>
+          <li>Copy the obfuscated code from the <strong>Output</strong> panel.</li>
+        </ol>
+        <p class="modal-link-row">
+          <a href="https://github.com/gwdio/Pyobfuscate" target="_blank" rel="noopener" class="modal-link">View on GitHub →</a>
+        </p>
+      </div>
+      <div class="modal-footer">
+        <label class="check-label">
+          <input type="checkbox" id="hide-welcome">
+          Don't show this again
+        </label>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>

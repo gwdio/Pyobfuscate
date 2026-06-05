@@ -5,30 +5,36 @@
 const STAGE_CATALOG = {
   junk: {
     label: 'Junk Injection',
+    description: 'Inserts meaningless statements (arithmetic, bitwise ops, lambdas) to bulk up the AST.',
     defaultConfig: { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
     allStrategies: ['ArithmeticStrategy', 'BitwiseStrategy', 'LambdaStrategy', 'NonConstantTimeStrategy', 'TestStrategy'],
   },
   loops: {
     label: 'Loop Obfuscation',
+    description: 'Converts for loops into while loops with a configurable index-tracking strategy.',
     defaultConfig: { strategy: 'CollatzStrategy' },
     allStrategies: ['CollatzStrategy', 'PlainStrategy'],
   },
   conditionals: {
     label: 'Conditional Wrapping',
+    description: 'Wraps statements in always-true if predicates so control flow is harder to read.',
     defaultConfig: { strategies: ['RandomConditionalStrategy'] },
     allStrategies: ['ConstantFalseStrategy', 'ConstantTrueStrategy', 'RandomConditionalStrategy'],
   },
   identities: {
     label: 'Identity Injection',
+    description: 'Wraps expressions in no-op operations (e.g. 1 and x) that evaluate to the original value.',
     defaultConfig: { probability: 0.2 },
   },
   numbers: {
     label: 'Number Obfuscation',
+    description: 'Replaces integer literals with multi-step cipher expressions that decode at runtime.',
     defaultConfig: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
     allStrategies: ['FeistelNumberStrategy', 'SimpleFeistelNumberStrategy', 'TemplateNumberStrategy', 'XorStringNumberStrategy'],
   },
   renaming: {
     label: 'Renaming',
+    description: 'Replaces all user-defined identifiers with random 8-character names.',
     defaultConfig: {},
   },
 };
@@ -59,6 +65,58 @@ const STAGE_PRESETS = {
     medium: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
     heavy:  { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy', 'SimpleFeistelNumberStrategy'] },
   },
+};
+
+const WELCOME_KEY = 'pyobfuscate_hide_welcome';
+
+const STRATEGY_TEMPLATES = {
+  junk: `from Injectors.junk_strategies import JunkInjectionStrategy
+import ast
+from typing import List
+
+class MyJunkStrategy(JunkInjectionStrategy):
+    # __init__ inherited: sets self.junk_vars (list of available variable names)
+
+    def get_junk(self, rng) -> List[ast.stmt]:
+        # Return AST statement nodes to inject as junk.
+        # rng is random.Random; self.junk_vars has pre-generated variable names.
+        return []`,
+  loops: `from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
+import ast
+from typing import List
+
+class MyLoopStrategy(LoopObfuscationStrategy):
+    # __init__ inherited: sets self.loop_var, self.start, self.stop, self.step, self.rng
+
+    def get_initial(self) -> List[ast.stmt]:
+        # Statements to initialise the loop counter before the while loop.
+        return []
+
+    def get_condition(self) -> ast.expr:
+        # The while-loop condition expression.
+        return ast.Constant(value=True)
+
+    def get_advance(self) -> List[ast.stmt]:
+        # Statements to update the loop state at the end of each iteration.
+        return []`,
+  identities: `from Injectors.identity_strategies import IdentityFuncStrategy
+import ast
+
+class MyIdentityStrategy(IdentityFuncStrategy):
+    def wrap(self, expr: ast.expr, rng) -> ast.expr:
+        # Return an expression that always evaluates to the same value as expr.
+        # Example: 1 and expr
+        return expr`,
+  numbers: `from Encryption.number_obscure_strategies import NumberObscureStrategy
+import ast
+
+class MyNumberStrategy(NumberObscureStrategy):
+    # __init__ inherited: sets self.naming and self.rng
+
+    def obfuscate(self, value: int) -> ast.expr:
+        # Return an AST expression that evaluates to value.
+        # Use self.rng for randomness; self.naming.get_name() for unique variable names.
+        return ast.Constant(value=value)`,
 };
 
 let _nextId = 0;
@@ -180,10 +238,12 @@ function renderConfigHTML(stage) {
   const c = stage.config;
   const iid = stage.instanceId;
   const presetRow = renderPresetRow(stage);
+  const desc = STAGE_CATALOG[stage.configType]?.description ?? '';
+  const descEl = desc ? `<p class="stage-desc">${desc}</p>` : '';
 
   switch (stage.configType) {
     case 'junk':
-      return `
+      return `${descEl}
         ${presetRow}
         <div class="config-row chip-row">
           <span class="row-label">Strategies:</span>
@@ -202,7 +262,7 @@ function renderConfigHTML(stage) {
         </div>`;
 
     case 'loops':
-      return `
+      return `${descEl}
         ${presetRow}
         <div class="config-row chip-row">
           <span class="row-label">Strategy:</span>
@@ -215,7 +275,7 @@ function renderConfigHTML(stage) {
         </div>`;
 
     case 'conditionals':
-      return `
+      return `${descEl}
         ${presetRow}
         <div class="config-row chip-row">
           <span class="row-label">Strategies:</span>
@@ -228,7 +288,7 @@ function renderConfigHTML(stage) {
         </div>`;
 
     case 'identities':
-      return `
+      return `${descEl}
         ${presetRow}
         <div class="config-row">
           <span class="row-label">Probability:</span>
@@ -238,7 +298,7 @@ function renderConfigHTML(stage) {
         </div>`;
 
     case 'numbers':
-      return `
+      return `${descEl}
         ${presetRow}
         <div class="config-row chip-row">
           <span class="row-label">Strategies:</span>
@@ -251,7 +311,7 @@ function renderConfigHTML(stage) {
         </div>`;
 
     default:
-      return '';
+      return descEl;
   }
 }
 
@@ -773,12 +833,45 @@ function updateUploadVisibility() {
 }
 
 // ============================================================
+// Welcome modal
+// ============================================================
+
+function showWelcomeModal() {
+  $('welcome-modal').removeAttribute('hidden');
+  $('hide-welcome').checked = false;
+}
+
+function closeWelcomeModal() {
+  $('welcome-modal').setAttribute('hidden', '');
+  if ($('hide-welcome').checked) {
+    localStorage.setItem(WELCOME_KEY, '1');
+  }
+}
+
+// ============================================================
 // Init
 // ============================================================
 
 function init() {
   renderStages();
   updateUploadVisibility();
+
+  if (!localStorage.getItem(WELCOME_KEY)) showWelcomeModal();
+  $('welcome-close').addEventListener('click', closeWelcomeModal);
+  $('help-btn').addEventListener('click', showWelcomeModal);
+  $('welcome-modal').addEventListener('click', e => {
+    if (e.target === $('welcome-modal')) closeWelcomeModal();
+  });
+
+  const tmplLabels = {
+    junk: 'Junk Injection',
+    loops: 'Loop Obfuscation',
+    identities: 'Identity Injection',
+    numbers: 'Number Obfuscation',
+  };
+  $('template-content').innerHTML = Object.entries(STRATEGY_TEMPLATES)
+    .map(([k, t]) => `<p class="tmpl-label">${tmplLabels[k]}</p><pre>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`)
+    .join('');
 
   document.querySelectorAll('input[name="execPath"]').forEach(radio => {
     radio.addEventListener('change', e => {
@@ -794,6 +887,9 @@ function init() {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       handleSubmit();
+    }
+    if (e.key === 'Escape' && !$('welcome-modal').hasAttribute('hidden')) {
+      closeWelcomeModal();
     }
   });
 

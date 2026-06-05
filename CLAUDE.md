@@ -83,7 +83,7 @@ The API wraps pipeline execution in `_PIPELINE_LOCK` (threading lock) to prevent
 
 ## Active Development
 
-Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements.
+Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe.
 
 Remaining plans:
 
@@ -93,7 +93,6 @@ Remaining plans:
 - `plans/plan-string-obfuscation.md` — obfuscate string literals
 - `plans/plan-bogus-functions.md` — inject dead functions at module level
 - `plans/plan-depth-size-guard.md` — input validation before `ast.parse()`
-- `plans/plan-pipeline-recipe.md` — add-step / duplicate UI, active-only recipe list
 - `plans/plan-usability-docs.md` — welcome modal, custom strategy help + starter templates
 
 ## Branch Convention
@@ -105,8 +104,7 @@ Remaining plans:
 ### API Config (`app.py`)
 
 `ObfuscationConfig` (Pydantic) exposes:
-- Per-phase toggles: `enable_junk`, `enable_loops`, `enable_conditionals`, `enable_identities`, `enable_numbers`, `enable_renaming`
-- Strategy allowlists per phase
-- `junk_density` (1–5), `identity_probability` (0.0–1.0)
+- `phase_configs: list[{type, config}]` — ordered phase list; when set, drives the pipeline (frontend always sends this)
+- Legacy flat fields (CLI path): per-phase toggles `enable_*`, strategy lists, `junk_density`, `identity_probability`
 - `seed` (optional int for reproducibility)
 - `input_path`, `output_path`, `return_code`
