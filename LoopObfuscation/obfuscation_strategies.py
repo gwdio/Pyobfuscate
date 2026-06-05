@@ -87,30 +87,48 @@ class CollatzStrategy(LoopObfuscationStrategy):
     """
     Implements Collatz-based loop obfuscation: transforms for->while with Collatz index resolution.
     """
-    def __init__(self, naming, start: int, stop: int, step: int, rng: random.Random):
+    def __init__(self, naming, start: int, stop: int, step: int, rng: random.Random, crt_steps: int = 10):
         super().__init__(naming, start, stop, step, rng)
         # Unique variables for this loop (loop_var provided by base)
         self.a_var = naming.get_name('a')
         self.b_var = naming.get_name('b')
         self.num_var = naming.get_name('num')
         # Collatz parameters
-        self.a = self.rng.choice([3, 5])
+        self.a = self.rng.choice([3, 5, 7])
         b_choices = [x for x in [-1, 1, 3, 5, 7, 11] if x != self.a]
         self.b = self.rng.choice(b_choices)
-        self.seed = self.rng.randint(19, 97)
         # Calculate number of iterations
         self.n = max(0, (self.stop - self.start + (self.step - 1 if self.step > 0 else -(self.step + 1))) // abs(self.step))
-        # Compute target state via forward Collatz
-        self.target = self._collatz_forward(self.a, self.b, self.seed, self.n)
+        # Find seed/target via CRT-narrowed prefix, falling back to pure probabilistic
+        prefix_len = min(self.n, crt_steps)
+        prefix = self._random_sequence(prefix_len)
+        result = self._find_seed_crt(prefix)
+        if result is not None:
+            self.seed, prefix_end = result
+            self.target = (prefix_end if self.n <= prefix_len
+                           else self._collatz_forward(self.a, self.b, prefix_end, self.n - prefix_len))
+        else:
+            self.seed = self.rng.randint(19, 97)
+            self.target = self._collatz_forward(self.a, self.b, self.seed, self.n)
         # Plain counter for O(1) index derivation per iteration
         self.idx_var = naming.get_name('idx')
         self.resolve_name = naming.get_name('resolve_collatz')
+
+    def _random_sequence(self, length: int) -> list:
+        seq = []
+        for _ in range(length):
+            seq.append(0 if (seq and seq[-1] == 1) else self.rng.randint(0, 1))
+        return seq
+
+    def _find_seed_crt(self, sequence: list):
+        from LoopObfuscation.collatz_seed import find_seed_crt
+        return find_seed_crt(''.join(map(str, sequence)), self.a, self.b, self.rng)
 
     def _collatz_forward(self, a: int, b: int, seed: int, n: int) -> int:
         for _ in range(n):
             if ((seed - b) % a == 0
                and ((seed - b) // a) % 2 == 1
-               and self.rng.random() < 0.95
+               and self.rng.random() < 0.75
                and seed not in {2,4,8,16,32,40,1312}):
                 seed = (seed - b) // a
             else:

@@ -408,6 +408,18 @@ resource "aws_s3_object" "package_json" {
   }))
 }
 
+# ── CloudFront cache invalidation ────────────────────────────────────────────
+
+resource "terraform_data" "frontend_invalidation" {
+  triggers_replace = [for obj in aws_s3_object.frontend : obj.etag]
+
+  provisioner "local-exec" {
+    command = "aws cloudfront create-invalidation --distribution-id ${aws_cloudfront_distribution.main.id} --paths '/*'"
+  }
+
+  depends_on = [aws_s3_object.frontend]
+}
+
 # ── Alerts ───────────────────────────────────────────────────────────────────
 
 resource "aws_sns_topic" "alerts" {

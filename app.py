@@ -30,6 +30,7 @@ _PACKAGE_FILES = [
     "Injectors/junk_conditional_strategies.py",
     "Injectors/junk_strategies.py",
     "LoopObfuscation/__init__.py",
+    "LoopObfuscation/collatz_seed.py",
     "LoopObfuscation/for_to_while_generic.py",
     "LoopObfuscation/loop_simplifier.py",
     "LoopObfuscation/ob_for.py",
