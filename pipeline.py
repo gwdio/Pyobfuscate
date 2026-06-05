@@ -52,6 +52,9 @@ class ObfuscationConfig:
     # ordered list of stages; None means use DEFAULT_STAGE_ORDER
     stage_order: Optional[List[str]] = None
 
+    # new-style ordered phase list: [{type, config}]; overrides flat fields when set
+    phase_configs: Optional[List[dict]] = None
+
     # output options
     return_code: bool = True
     seed: Optional[int] = None
@@ -62,6 +65,33 @@ def _resolve(registry: dict, name: str, phase: str):
         valid = ", ".join(sorted(registry))
         raise ValueError(f"Unknown {phase} strategy '{name}'. Valid options: {valid}")
     return registry[name]
+
+
+def _run_phase(stage_type: str, cfg_dict: dict, tree, naming, rng):
+    if stage_type == "junk":
+        strategies = cfg_dict.get("strategies", [])
+        density = cfg_dict.get("density", 2)
+        if strategies:
+            selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in strategies]
+            tree = JunkInjector(naming, selected, density, rng).apply(tree)
+    elif stage_type == "loops":
+        strategy_name = cfg_dict.get("strategy", "CollatzStrategy")
+        loop_cls = _resolve(LoopObfuscationStrategy._registry, strategy_name, "loop")
+        tree = Ob_For(naming, loop_cls, rng).apply(tree)
+    elif stage_type == "conditionals":
+        strategies = cfg_dict.get("strategies", [])
+        if strategies:
+            cond_selected = [_resolve(JunkConditionalStrategy._registry, k, "conditional") for k in strategies]
+            tree = ConditionalInjector(naming, cond_selected, 1, rng).apply(tree)
+    elif stage_type == "identities":
+        prob = cfg_dict.get("probability", 0.2)
+        tree = IdentityFuncInjector(MixedIdentityStrategy(), prob, rng).apply(tree)
+    elif stage_type == "numbers":
+        for ns in cfg_dict.get("strategies", []):
+            tree = NumberObscurerInjector(naming, _resolve(NumberObscureStrategy._registry, ns, "number"), rng).apply(tree)
+    elif stage_type == "renaming":
+        tree = Renamer(naming.get_namespace(), rng).apply(tree)
+    return tree
 
 
 def run_pipeline(cfg: ObfuscationConfig) -> str:
@@ -78,6 +108,12 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
 
     naming = Naming()
     naming.analyze(tree)
+
+    if cfg.phase_configs is not None:
+        for phase in cfg.phase_configs:
+            tree = _run_phase(phase["type"], phase.get("config", {}), tree, naming, rng)
+        tree = ast.fix_missing_locations(tree)
+        return ast.unparse(tree)
 
     for stage in stages:
         if stage == "junk" and cfg.enable_junk and cfg.junk_strategies:

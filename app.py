@@ -86,6 +86,11 @@ class ObfuscationRequest(BaseModel):
         description="Ordered stage names to run. Valid: " + ", ".join(DEFAULT_STAGE_ORDER),
     )
 
+    phase_configs: Optional[List[dict]] = Field(
+        None,
+        description="Ordered list of {type, config} dicts. When set, replaces flat per-phase fields.",
+    )
+
     return_code: bool = True
     seed: Optional[int] = Field(None, description="Seed for deterministic output")
 

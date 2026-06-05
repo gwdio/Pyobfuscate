@@ -1,56 +1,87 @@
 // ============================================================
-// Initial state
+// Stage catalog, presets & instance factory
 // ============================================================
 
-const STAGE_DEFS = [
-  {
-    id: 'junk', label: 'Junk Injection',
-    enabled: true, expanded: false,
-    configType: 'junk',
-    config: { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
+const STAGE_CATALOG = {
+  junk: {
+    label: 'Junk Injection',
+    defaultConfig: { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
     allStrategies: ['ArithmeticStrategy', 'BitwiseStrategy', 'LambdaStrategy', 'NonConstantTimeStrategy', 'TestStrategy'],
   },
-  {
-    id: 'loops', label: 'Loop Obfuscation',
-    enabled: true, expanded: false,
-    configType: 'loop',
-    config: { strategy: 'CollatzStrategy' },
+  loops: {
+    label: 'Loop Obfuscation',
+    defaultConfig: { strategy: 'CollatzStrategy' },
     allStrategies: ['CollatzStrategy', 'PlainStrategy'],
   },
-  {
-    id: 'conditionals', label: 'Conditional Wrapping',
-    enabled: true, expanded: false,
-    configType: 'conditionals',
-    config: { strategies: ['RandomConditionalStrategy'] },
+  conditionals: {
+    label: 'Conditional Wrapping',
+    defaultConfig: { strategies: ['RandomConditionalStrategy'] },
     allStrategies: ['ConstantFalseStrategy', 'ConstantTrueStrategy', 'RandomConditionalStrategy'],
   },
-  {
-    id: 'identities', label: 'Identity Injection',
-    enabled: true, expanded: false,
-    configType: 'identities',
-    config: { probability: 0.2 },
+  identities: {
+    label: 'Identity Injection',
+    defaultConfig: { probability: 0.2 },
   },
-  {
-    id: 'numbers', label: 'Number Obfuscation',
-    enabled: true, expanded: false,
-    configType: 'numbers',
-    config: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
+  numbers: {
+    label: 'Number Obfuscation',
+    defaultConfig: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
     allStrategies: ['FeistelNumberStrategy', 'SimpleFeistelNumberStrategy', 'TemplateNumberStrategy', 'XorStringNumberStrategy'],
   },
-  {
-    id: 'renaming', label: 'Renaming',
-    enabled: true, expanded: false,
-    configType: 'renaming',
-    config: {},
+  renaming: {
+    label: 'Renaming',
+    defaultConfig: {},
   },
-];
+};
+
+const STAGE_PRESETS = {
+  junk: {
+    light:  { density: 1, strategies: ['BitwiseStrategy'] },
+    medium: { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
+    heavy:  { density: 4, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy', 'LambdaStrategy'] },
+  },
+  loops: {
+    light:  { strategy: 'PlainStrategy' },
+    medium: { strategy: 'CollatzStrategy' },
+    heavy:  { strategy: 'CollatzStrategy' },
+  },
+  conditionals: {
+    light:  { strategies: ['ConstantTrueStrategy'] },
+    medium: { strategies: ['RandomConditionalStrategy'] },
+    heavy:  { strategies: ['ConstantTrueStrategy', 'ConstantFalseStrategy', 'RandomConditionalStrategy'] },
+  },
+  identities: {
+    light:  { probability: 0.1 },
+    medium: { probability: 0.2 },
+    heavy:  { probability: 0.5 },
+  },
+  numbers: {
+    light:  { strategies: ['FeistelNumberStrategy'] },
+    medium: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
+    heavy:  { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy', 'SimpleFeistelNumberStrategy'] },
+  },
+};
+
+let _nextId = 0;
+
+function makeInstance(configType) {
+  const def = STAGE_CATALOG[configType];
+  return {
+    instanceId: _nextId++,
+    configType,
+    label: def.label,
+    enabled: true,
+    expanded: false,
+    config: JSON.parse(JSON.stringify(def.defaultConfig)),
+    allStrategies: def.allStrategies ? [...def.allStrategies] : undefined,
+  };
+}
+
+function initStages() {
+  return ['junk', 'loops', 'conditionals', 'identities', 'numbers', 'renaming'].map(makeInstance);
+}
 
 const state = {
-  stages: STAGE_DEFS.map(s => ({
-    ...s,
-    config: Array.isArray(s.config) ? [...s.config] : { ...s.config },
-    allStrategies: s.allStrategies ? [...s.allStrategies] : undefined,
-  })),
+  stages: initStages(),
   executionPath: 'client',
   pyodide: null,
   pyodideReady: false,
@@ -64,6 +95,65 @@ const state = {
 const $ = id => document.getElementById(id);
 
 // ============================================================
+// Config helpers
+// ============================================================
+
+function configMatches(config, preset) {
+  for (const [k, v] of Object.entries(preset)) {
+    if (Array.isArray(v)) {
+      if (!Array.isArray(config[k]) || config[k].length !== v.length) return false;
+      if (!v.every(s => config[k].includes(s))) return false;
+    } else if (typeof v === 'number') {
+      if (Math.abs((config[k] ?? v) - v) > 0.001) return false;
+    } else {
+      if (config[k] !== v) return false;
+    }
+  }
+  return true;
+}
+
+function detectPreset(stage) {
+  const presets = STAGE_PRESETS[stage.configType];
+  if (!presets) return null;
+  for (const name of ['light', 'medium', 'heavy']) {
+    if (configMatches(stage.config, presets[name])) return name;
+  }
+  return 'custom';
+}
+
+function makeSummary(stage) {
+  const c = stage.config;
+  const shorten = s => s
+    .replace('Strategy', '')
+    .replace('NonConstantTime', 'NonConst')
+    .replace('Arithmetic', 'Arith')
+    .replace('Conditional', '')
+    .replace('XorString', 'XorStr')
+    .replace('SimpleFeistel', 'SimpleFst')
+    .replace('Random', 'Rand');
+  switch (stage.configType) {
+    case 'junk': {
+      const names = (c.strategies || []).map(shorten).join(', ');
+      return names ? `${names} · density ${c.density}` : 'no strategies';
+    }
+    case 'loops':
+      return shorten(c.strategy ?? 'Collatz');
+    case 'conditionals': {
+      const names = (c.strategies || []).map(shorten).join(', ');
+      return names || 'none';
+    }
+    case 'identities':
+      return `prob ${(c.probability ?? 0.2).toFixed(2)}`;
+    case 'numbers': {
+      const names = (c.strategies || []).map(shorten).join(', ');
+      return names || 'none';
+    }
+    default:
+      return '';
+  }
+}
+
+// ============================================================
 // Stage rendering
 // ============================================================
 
@@ -71,73 +161,92 @@ function hasConfig(stage) {
   return stage.configType !== 'renaming';
 }
 
-function renderConfigHTML(stage, idx) {
+function renderPresetRow(stage) {
+  const presets = STAGE_PRESETS[stage.configType];
+  if (!presets) return '';
+  const active = detectPreset(stage);
+  const iid = stage.instanceId;
+  const names = active === 'custom' ? ['light', 'medium', 'heavy', 'custom'] : ['light', 'medium', 'heavy'];
+  const labels = { light: 'Light', medium: 'Medium', heavy: 'Heavy', custom: 'Custom' };
+  return `<div class="preset-row">
+    ${names.map(n => `
+      <button class="preset-btn${active === n ? ' active' : ''}"
+              data-preset="${n}" data-iid="${iid}">${labels[n]}</button>
+    `).join('')}
+  </div>`;
+}
+
+function renderConfigHTML(stage) {
   const c = stage.config;
+  const iid = stage.instanceId;
+  const presetRow = renderPresetRow(stage);
+
   switch (stage.configType) {
     case 'junk':
       return `
+        ${presetRow}
+        <div class="config-row chip-row">
+          <span class="row-label">Strategies:</span>
+          ${(stage.allStrategies || []).map(s => `
+            <button class="stage-chip${(c.strategies||[]).includes(s) ? ' active' : ''}"
+                    data-chip="junk_strategy" data-iid="${iid}" data-value="${s}">
+              ${s.replace('Strategy', '')}
+            </button>
+          `).join('')}
+        </div>
         <div class="config-row">
           <span class="row-label">Density:</span>
           <input type="range" min="1" max="5" value="${c.density}"
-            data-config="density" data-idx="${idx}">
-          <span class="range-val" id="density-val-${idx}">${c.density}</span>
-        </div>
-        <div class="config-row">
-          <span class="row-label">Strategies:</span>
-          ${(stage.allStrategies || []).map(s => `
-            <label class="check-label">
-              <input type="checkbox" value="${s}"
-                data-config="junk_strategy" data-idx="${idx}"
-                ${c.strategies.includes(s) ? 'checked' : ''}> ${s}
-            </label>
-          `).join('')}
+            data-config="density" data-iid="${iid}">
+          <span class="range-val" id="density-val-${iid}">${c.density}</span>
         </div>`;
 
-    case 'loop':
+    case 'loops':
       return `
-        <div class="config-row">
+        ${presetRow}
+        <div class="config-row chip-row">
           <span class="row-label">Strategy:</span>
           ${(stage.allStrategies || []).map(s => `
-            <label class="check-label">
-              <input type="radio" name="loop-strat-${idx}" value="${s}"
-                data-config="loop_strategy" data-idx="${idx}"
-                ${c.strategy === s ? 'checked' : ''}> ${s}
-            </label>
+            <button class="stage-chip${c.strategy === s ? ' active' : ''}"
+                    data-chip="loop_strategy" data-iid="${iid}" data-value="${s}">
+              ${s.replace('Strategy', '')}
+            </button>
           `).join('')}
         </div>`;
 
     case 'conditionals':
       return `
-        <div class="config-row">
+        ${presetRow}
+        <div class="config-row chip-row">
           <span class="row-label">Strategies:</span>
           ${(stage.allStrategies || []).map(s => `
-            <label class="check-label">
-              <input type="checkbox" value="${s}"
-                data-config="cond_strategy" data-idx="${idx}"
-                ${c.strategies.includes(s) ? 'checked' : ''}> ${s}
-            </label>
+            <button class="stage-chip${(c.strategies||[]).includes(s) ? ' active' : ''}"
+                    data-chip="cond_strategy" data-iid="${iid}" data-value="${s}">
+              ${s.replace('Strategy', '')}
+            </button>
           `).join('')}
         </div>`;
 
     case 'identities':
       return `
+        ${presetRow}
         <div class="config-row">
           <span class="row-label">Probability:</span>
           <input type="range" min="0" max="1" step="0.05" value="${c.probability}"
-            data-config="probability" data-idx="${idx}">
-          <span class="range-val" id="prob-val-${idx}">${c.probability.toFixed(2)}</span>
+            data-config="probability" data-iid="${iid}">
+          <span class="range-val" id="prob-val-${iid}">${c.probability.toFixed(2)}</span>
         </div>`;
 
     case 'numbers':
       return `
-        <div class="config-row">
+        ${presetRow}
+        <div class="config-row chip-row">
           <span class="row-label">Strategies:</span>
           ${(stage.allStrategies || []).map(s => `
-            <label class="check-label">
-              <input type="checkbox" value="${s}"
-                data-config="num_strategy" data-idx="${idx}"
-                ${c.strategies.includes(s) ? 'checked' : ''}> ${s}
-            </label>
+            <button class="stage-chip${(c.strategies||[]).includes(s) ? ' active' : ''}"
+                    data-chip="num_strategy" data-iid="${iid}" data-value="${s}">
+              ${s.replace('Strategy', '')}
+            </button>
           `).join('')}
         </div>`;
 
@@ -150,140 +259,240 @@ function renderStages() {
   const list = $('stage-list');
   list.innerHTML = '';
 
-  state.stages.forEach((stage, idx) => {
+  state.stages.forEach(stage => {
+    const iid = stage.instanceId;
     const li = document.createElement('li');
-    li.className = `stage-item${stage.enabled ? '' : ' disabled'}`;
-    li.dataset.idx = idx;
+    const isPinned = stage.configType === 'renaming';
+
+    let cls = 'stage-item';
+    if (isPinned) cls += ' stage-pinned';
+    if (!stage.enabled) cls += ' disabled';
+    li.className = cls;
+    li.dataset.iid = iid;
 
     const configPanel = hasConfig(stage)
-      ? `<div class="stage-config" id="config-${idx}"
+      ? `<div class="stage-config" id="config-${iid}"
              style="${stage.expanded ? '' : 'display:none'}">
-           ${renderConfigHTML(stage, idx)}
+           ${renderConfigHTML(stage)}
          </div>`
       : '';
 
+    const summary = hasConfig(stage)
+      ? `<span class="stage-summary">${makeSummary(stage)}</span>`
+      : '';
+
+    const toggleBtn = `<button class="stage-item-btn stage-toggle-btn"
+               data-action="toggle" data-iid="${iid}"
+               title="${stage.enabled ? 'Disable stage' : 'Enable stage'}">${stage.enabled ? '⊙' : '○'}</button>`;
+
+    const actionBtns = isPinned
+      ? `<button class="stage-item-btn stage-item-remove" data-action="remove" data-iid="${iid}" title="Remove">×</button>`
+      : `<button class="stage-item-btn stage-item-dup" data-action="dup" data-iid="${iid}" title="Duplicate">⧉</button>
+         <button class="stage-item-btn stage-item-remove" data-action="remove" data-iid="${iid}" title="Remove">×</button>`;
+
     li.innerHTML = `
       <div class="stage-row">
-        <span class="drag-handle">⠿</span>
-        <label class="stage-toggle">
-          <input type="checkbox" data-idx="${idx}" ${stage.enabled ? 'checked' : ''}>
-        </label>
-        <span class="stage-label">${stage.label}</span>
+        ${isPinned ? '<span class="drag-handle drag-handle-spacer"></span>' : '<span class="drag-handle">⠿</span>'}
+        <div class="stage-label-group">
+          <span class="stage-label">${stage.label}</span>
+          ${summary}
+        </div>
+        ${toggleBtn}
         ${hasConfig(stage)
-          ? `<button class="expand-btn" data-idx="${idx}">${stage.expanded ? '▾' : '▸'}</button>`
+          ? `<button class="expand-btn" data-iid="${iid}">${stage.expanded ? '▾' : '▸'}</button>`
           : ''}
+        ${actionBtns}
       </div>
       ${configPanel}`;
 
     list.appendChild(li);
   });
 
-  // Toggle enable
-  list.querySelectorAll('.stage-toggle input').forEach(cb => {
-    cb.addEventListener('change', e => {
-      const idx = +e.target.dataset.idx;
-      state.stages[idx].enabled = e.target.checked;
-      list.children[idx].classList.toggle('disabled', !e.target.checked);
-    });
-  });
+  // Add-step row
+  let addRow = $('add-step-row');
+  if (!addRow) {
+    addRow = document.createElement('div');
+    addRow.id = 'add-step-row';
+    list.parentElement.appendChild(addRow);
+  }
+  const hasRenaming = state.stages.some(s => s.configType === 'renaming');
+  const addableTypes = Object.keys(STAGE_CATALOG).filter(t => t !== 'renaming' || !hasRenaming);
+  addRow.innerHTML = `
+    <select id="add-step-select">
+      ${addableTypes.map(t => `<option value="${t}">${STAGE_CATALOG[t].label}</option>`).join('')}
+    </select>
+    <button class="btn-secondary" id="add-step-btn">+ Add step</button>`;
 
-  // Expand/collapse
+  // Wire expand/collapse
   list.querySelectorAll('.expand-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const idx = +btn.dataset.idx;
-      state.stages[idx].expanded = !state.stages[idx].expanded;
-      const panel = $(`config-${idx}`);
-      panel.style.display = state.stages[idx].expanded ? 'block' : 'none';
-      btn.textContent = state.stages[idx].expanded ? '▾' : '▸';
+      const iid = +btn.dataset.iid;
+      const stage = state.stages.find(s => s.instanceId === iid);
+      stage.expanded = !stage.expanded;
+      const panel = $(`config-${iid}`);
+      panel.style.display = stage.expanded ? 'block' : 'none';
+      btn.textContent = stage.expanded ? '▾' : '▸';
     });
   });
 
-  // Config inputs
-  list.querySelectorAll('[data-config]').forEach(el => {
-    const event = el.type === 'range' ? 'input' : 'change';
-    el.addEventListener(event, handleConfigChange);
+  // Wire action buttons (toggle, remove, dup)
+  list.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const iid = +btn.dataset.iid;
+      const action = btn.dataset.action;
+      if (action === 'remove')      removeStage(iid);
+      else if (action === 'dup')    duplicateStage(iid);
+      else if (action === 'toggle') toggleStage(iid);
+    });
   });
 
-  setupDragDrop(list);
+  // Wire range inputs
+  list.querySelectorAll('[data-config]').forEach(el => {
+    el.addEventListener('input', handleConfigChange);
+  });
+
+  // Wire strategy chips
+  list.querySelectorAll('[data-chip]').forEach(btn => {
+    btn.addEventListener('click', handleChipClick);
+  });
+
+  // Wire preset buttons
+  list.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.addEventListener('click', handlePresetClick);
+  });
+
+  // Wire add-step
+  $('add-step-btn').addEventListener('click', () => {
+    addStage($('add-step-select').value);
+  });
+
+  setupSortable(list);
+}
+
+function toggleStage(iid) {
+  const stage = state.stages.find(s => s.instanceId === iid);
+  if (stage) stage.enabled = !stage.enabled;
+  renderStages();
+}
+
+function removeStage(iid) {
+  state.stages = state.stages.filter(s => s.instanceId !== iid);
+  renderStages();
+}
+
+function duplicateStage(iid) {
+  const idx = state.stages.findIndex(s => s.instanceId === iid);
+  const src = state.stages[idx];
+  if (src.configType === 'renaming') return;
+  const copy = makeInstance(src.configType);
+  copy.config = JSON.parse(JSON.stringify(src.config));
+  copy.allStrategies = src.allStrategies ? [...src.allStrategies] : undefined;
+  state.stages.splice(idx + 1, 0, copy);
+  renderStages();
+}
+
+function addStage(configType) {
+  const inst = makeInstance(configType);
+  if (configType === 'renaming') {
+    state.stages.push(inst);
+  } else {
+    const renamingIdx = state.stages.findIndex(s => s.configType === 'renaming');
+    const insertAt = renamingIdx >= 0 ? renamingIdx : state.stages.length;
+    state.stages.splice(insertAt, 0, inst);
+  }
+  renderStages();
 }
 
 function handleConfigChange(e) {
-  const idx = +e.target.dataset.idx;
+  const iid = +e.target.dataset.iid;
   const key = e.target.dataset.config;
-  const stage = state.stages[idx];
+  const stage = state.stages.find(s => s.instanceId === iid);
+  if (!stage) return;
 
-  switch (key) {
-    case 'density': {
-      const v = +e.target.value;
-      stage.config.density = v;
-      const span = $(`density-val-${idx}`);
-      if (span) span.textContent = v;
-      break;
-    }
-    case 'probability': {
-      const v = parseFloat(e.target.value);
-      stage.config.probability = v;
-      const span = $(`prob-val-${idx}`);
-      if (span) span.textContent = v.toFixed(2);
-      break;
-    }
-    case 'loop_strategy':
-      stage.config.strategy = e.target.value;
-      break;
-    case 'junk_strategy':
-      stage.config.strategies = checkedValues(`[data-config="junk_strategy"][data-idx="${idx}"]`);
-      break;
-    case 'cond_strategy':
-      stage.config.strategies = checkedValues(`[data-config="cond_strategy"][data-idx="${idx}"]`);
-      break;
-    case 'num_strategy':
-      stage.config.strategies = checkedValues(`[data-config="num_strategy"][data-idx="${idx}"]`);
-      break;
+  if (key === 'density') {
+    const v = +e.target.value;
+    stage.config.density = v;
+    const span = $(`density-val-${iid}`);
+    if (span) span.textContent = v;
+  } else if (key === 'probability') {
+    const v = parseFloat(e.target.value);
+    stage.config.probability = v;
+    const span = $(`prob-val-${iid}`);
+    if (span) span.textContent = v.toFixed(2);
   }
+
+  // Update summary and preset row without full re-render
+  updateSummaryAndPreset(stage);
 }
 
-function checkedValues(selector) {
-  return Array.from(document.querySelectorAll(selector + ':checked')).map(el => el.value);
+function handleChipClick(e) {
+  const btn = e.currentTarget;
+  const iid = +btn.dataset.iid;
+  const key = btn.dataset.chip;
+  const value = btn.dataset.value;
+  const stage = state.stages.find(s => s.instanceId === iid);
+  if (!stage) return;
+
+  if (key === 'loop_strategy') {
+    stage.config.strategy = value;
+  } else {
+    const arr = stage.config.strategies;
+    const idx = arr.indexOf(value);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(value);
+  }
+  renderStages();
+}
+
+function handlePresetClick(e) {
+  const btn = e.currentTarget;
+  const iid = +btn.dataset.iid;
+  const presetName = btn.dataset.preset;
+  const stage = state.stages.find(s => s.instanceId === iid);
+  if (!stage || presetName === 'custom') return;
+  const preset = STAGE_PRESETS[stage.configType]?.[presetName];
+  if (!preset) return;
+  stage.config = JSON.parse(JSON.stringify(preset));
+  renderStages();
+}
+
+function updateSummaryAndPreset(stage) {
+  // Lightweight update: just refresh the summary text and preset row active state
+  // without re-rendering the whole list (avoids collapsing panels on range drag)
+  const iid = stage.instanceId;
+  const summaryEl = document.querySelector(`[data-iid="${iid}"] .stage-summary`);
+  if (summaryEl) summaryEl.textContent = makeSummary(stage);
+
+  const active = detectPreset(stage);
+  document.querySelectorAll(`[data-preset][data-iid="${iid}"]`).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === active);
+  });
 }
 
 // ============================================================
-// Drag & drop
+// SortableJS drag & drop
 // ============================================================
 
-let dragSrcIdx = null;
+let _sortable = null;
 
-function setupDragDrop(list) {
-  Array.from(list.children).forEach(item => {
-    const handle = item.querySelector('.drag-handle');
-    if (handle) {
-      handle.addEventListener('mousedown', () => { item.draggable = true; });
-    }
-    item.addEventListener('dragstart', e => {
-      dragSrcIdx = +item.dataset.idx;
-      item.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    item.addEventListener('dragend', () => {
-      item.draggable = false;
-      item.classList.remove('dragging');
-      dragSrcIdx = null;
-    });
-    item.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      item.classList.add('drag-over');
-    });
-    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
-    item.addEventListener('drop', e => {
-      e.preventDefault();
-      item.classList.remove('drag-over');
-      const destIdx = +item.dataset.idx;
-      if (dragSrcIdx !== null && dragSrcIdx !== destIdx) {
-        const [moved] = state.stages.splice(dragSrcIdx, 1);
-        state.stages.splice(destIdx, 0, moved);
-        renderStages();
-      }
-    });
+function setupSortable(list) {
+  if (_sortable) { _sortable.destroy(); _sortable = null; }
+  if (typeof Sortable === 'undefined') return;
+  _sortable = Sortable.create(list, {
+    handle: '.drag-handle:not(.drag-handle-spacer)',
+    filter: '.stage-pinned',
+    preventOnFilter: false,
+    animation: 120,
+    ghostClass: 'dragging',
+    onMove(evt) {
+      return !evt.related.classList.contains('stage-pinned');
+    },
+    onEnd(evt) {
+      if (evt.oldIndex === evt.newIndex) return;
+      const moved = state.stages.splice(evt.oldIndex, 1)[0];
+      state.stages.splice(evt.newIndex, 0, moved);
+      renderStages();
+    },
   });
 }
 
@@ -342,7 +551,6 @@ async function loadPackage() {
 
   const py = state.pyodide;
 
-  // Create subdirectories
   const dirs = new Set();
   for (const path of Object.keys(files)) {
     const parts = path.split('/');
@@ -354,12 +562,10 @@ async function loadPackage() {
     try { py.FS.mkdir('/home/pyodide/' + dir); } catch (_) {}
   }
 
-  // Write source files
   for (const [path, content] of Object.entries(files)) {
     py.FS.writeFile('/home/pyodide/' + path, content, { encoding: 'utf8' });
   }
 
-  // Add to sys.path and trigger all registry registrations
   console.log('[pyodide] importing pipeline');
   await py.runPythonAsync(`
 import sys
@@ -375,32 +581,14 @@ import pipeline
 // ============================================================
 
 function buildConfig() {
-  const get = id => state.stages.find(s => s.id === id) || {};
-  const junk  = get('junk');
-  const loops = get('loops');
-  const conds = get('conditionals');
-  const ids   = get('identities');
-  const nums  = get('numbers');
-  const ren   = get('renaming');
-
+  const phase_configs = state.stages
+    .filter(s => s.enabled !== false)
+    .map(s => ({ type: s.configType, config: s.config }));
   const seedRaw = $('seed').value.trim();
-
   return {
-    enable_junk:          junk.enabled  ?? true,
-    enable_loops:         loops.enabled ?? true,
-    enable_conditionals:  conds.enabled ?? true,
-    enable_identities:    ids.enabled   ?? true,
-    enable_numbers:       nums.enabled  ?? true,
-    enable_renaming:      ren.enabled   ?? true,
-    junk_strategies:      junk.config?.strategies  ?? [],
-    junk_density:         junk.config?.density     ?? 2,
-    loop_strategy:        loops.config?.strategy   ?? 'CollatzStrategy',
-    conditional_strategies: conds.config?.strategies ?? [],
-    identity_probability: ids.config?.probability  ?? 0.2,
-    number_strategies:    nums.config?.strategies  ?? [],
-    stage_order:          state.stages.map(s => s.id),
-    seed:                 seedRaw ? parseInt(seedRaw, 10) : null,
-    return_code:          true,
+    phase_configs,
+    seed: seedRaw ? parseInt(seedRaw, 10) : null,
+    return_code: true,
   };
 }
 
@@ -459,19 +647,7 @@ with open('/tmp/input.py', 'w') as f:
 
 cfg = ObfuscationConfig(
     input_path=Path('/tmp/input.py'),
-    enable_junk=cfg_data['enable_junk'],
-    enable_loops=cfg_data['enable_loops'],
-    enable_conditionals=cfg_data['enable_conditionals'],
-    enable_identities=cfg_data['enable_identities'],
-    enable_numbers=cfg_data['enable_numbers'],
-    enable_renaming=cfg_data['enable_renaming'],
-    junk_strategies=cfg_data['junk_strategies'],
-    junk_density=cfg_data['junk_density'],
-    loop_strategy=cfg_data['loop_strategy'],
-    conditional_strategies=cfg_data['conditional_strategies'],
-    identity_probability=cfg_data['identity_probability'],
-    number_strategies=cfg_data['number_strategies'],
-    stage_order=cfg_data['stage_order'],
+    phase_configs=cfg_data['phase_configs'],
     seed=cfg_data['seed'],
 )
 run_pipeline(cfg)
@@ -506,7 +682,7 @@ async function runServerSide(code) {
 }
 
 // ============================================================
-// Custom module upload (plan 2c)
+// Custom module upload
 // ============================================================
 
 async function handleCustomUpload(file) {
@@ -565,10 +741,10 @@ json.dumps({
   const reg = JSON.parse(registriesJson);
 
   state.stages.forEach(stage => {
-    if (stage.id === 'junk')         stage.allStrategies = reg.junk;
-    if (stage.id === 'loops')        stage.allStrategies = reg.loop;
-    if (stage.id === 'conditionals') stage.allStrategies = reg.conditional;
-    if (stage.id === 'numbers')      stage.allStrategies = reg.number;
+    if (stage.configType === 'junk')         stage.allStrategies = reg.junk;
+    if (stage.configType === 'loops')        stage.allStrategies = reg.loop;
+    if (stage.configType === 'conditionals') stage.allStrategies = reg.conditional;
+    if (stage.configType === 'numbers')      stage.allStrategies = reg.number;
   });
 
   renderStages();
@@ -604,7 +780,6 @@ function init() {
   renderStages();
   updateUploadVisibility();
 
-  // Execution path toggle
   document.querySelectorAll('input[name="execPath"]').forEach(radio => {
     radio.addEventListener('change', e => {
       state.executionPath = e.target.value;
@@ -613,10 +788,8 @@ function init() {
     });
   });
 
-  // Submit button
   $('submit-btn').addEventListener('click', handleSubmit);
 
-  // Ctrl+Enter shortcut
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -624,20 +797,17 @@ function init() {
     }
   });
 
-  // Copy button
   $('copy-btn').addEventListener('click', () => {
     const text = $('output').value;
     if (text) navigator.clipboard.writeText(text).catch(() => {});
   });
 
-  // Custom module upload
   $('custom-upload').addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) handleCustomUpload(file);
     e.target.value = '';
   });
 
-  // Kick off Pyodide (non-blocking)
   syncRunButton();
   initPyodide();
 }
