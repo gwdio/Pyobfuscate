@@ -505,8 +505,10 @@ input[type="file"] {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  max-width: 480px;
+  max-width: 540px;
   width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -549,6 +551,44 @@ input[type="file"] {
 
 .modal-pitch {
   color: var(--text);
+  font-weight: 500;
+}
+
+.modal-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0;
+}
+
+.modal-features li {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--muted);
+  padding-left: 1rem;
+  position: relative;
+}
+
+.modal-features li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--border);
+}
+
+.modal-features li strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.modal-section-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: -0.25rem;
 }
 
 .modal-steps {
@@ -569,13 +609,34 @@ input[type="file"] {
   color: var(--text);
 }
 
-.modal-link-row { padding-top: 0.1rem; }
+.modal-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  border-left: 2px solid var(--border);
+  padding-left: 0.65rem;
+}
+
+.modal-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .modal-link {
   color: var(--accent);
   text-decoration: none;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
 }
 .modal-link:hover { text-decoration: underline; }
+
+.modal-credit {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.modal-credit .modal-link { font-size: inherit; }
 
 .modal-footer {
   border-top: 1px solid var(--border);
