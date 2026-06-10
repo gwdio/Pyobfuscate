@@ -64,6 +64,7 @@ Key strategy families:
 - **Loop**: `PlainStrategy` (straightforward for→while), `CollatzStrategy` (Collatz-like state machine)
 - **Identity**: `DefaultIdentityFuncStrategy` (`1 and x`), `OrIdentityStrategy`
 - **Number**: `FeistelNumberStrategy` (4-round Feistel cipher), `XorStringNumberStrategy`
+- **String**: `XorStringStrategy` (XOR bytes + injected decoder), `CharArrayStrategy` (`chr()` chain)
 
 ### Key Modules
 
@@ -76,6 +77,7 @@ Key strategy families:
 | `Injectors/conditional_injector.py` | Wraps statements in opaque always-true predicates |
 | `LoopObfuscation/ob_for.py` | Orchestrates for→while: unwraps nested loops, then applies strategy |
 | `Encryption/number_obscurer.py` | Visits `ast.Constant` int nodes and replaces with encoded expressions |
+| `Encryption/string_obscurer.py` | Visits `ast.Constant` str nodes and replaces with encoded expressions; skips docstrings and f-string internals |
 
 ### Concurrency
 
@@ -83,12 +85,11 @@ The API wraps pipeline execution in `_PIPELINE_LOCK` (threading lock) to prevent
 
 ## Active Development
 
-Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe, usability-docs, plan-3-collatz-linear, plan-4-collatz-seed, plan-depth-size-guard.
+Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe, usability-docs, plan-3-collatz-linear, plan-4-collatz-seed, plan-depth-size-guard, plan-string-obfuscation.
 
 Remaining plans:
 
 - `plans/plan-import-obfuscation.md` — obfuscate `import` statements
-- `plans/plan-string-obfuscation.md` — obfuscate string literals
 - `plans/plan-bogus-functions.md` — inject dead functions at module level
 
 ## Branch Convention

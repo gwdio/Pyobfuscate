@@ -6,6 +6,7 @@ from typing import List, Optional
 
 # Import strategy modules so subclasses register via __init_subclass__
 import Encryption.number_obscure_strategies as _num_strats
+import Encryption.string_obscure_strategies as _str_strats
 import Injectors.junk_strategies as _junk_strats
 import Injectors.junk_conditional_strategies as _cond_strats
 import Injectors.identity_strategies as _id_strats
@@ -13,6 +14,8 @@ import LoopObfuscation.obfuscation_strategies as _loop_strats
 
 from Encryption.number_obscure_strategies import NumberObscureStrategy
 from Encryption.number_obscurer import NumberObscurerInjector
+from Encryption.string_obscure_strategies import StringObscureStrategy
+from Encryption.string_obscurer import StringObfuscatorInjector
 from Injectors.conditional_injector import ConditionalInjector
 from Injectors.identity_injector import IdentityFuncInjector
 from Injectors.identity_strategies import MixedIdentityStrategy
@@ -24,7 +27,7 @@ from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Renaming.renamer import Renamer
 from NameTracker.naming import Naming
 
-DEFAULT_STAGE_ORDER = ["junk", "loops", "conditionals", "identities", "numbers", "renaming"]
+DEFAULT_STAGE_ORDER = ["junk", "loops", "conditionals", "identities", "numbers", "strings", "renaming"]
 
 
 @dataclass
@@ -48,6 +51,8 @@ class ObfuscationConfig:
     conditional_strategies: List[str] = field(default_factory=lambda: ["RandomConditionalStrategy"])
     identity_probability: float = 0.2
     number_strategies: List[str] = field(default_factory=lambda: ["FeistelNumberStrategy", "XorStringNumberStrategy"])
+    enable_strings: bool = True
+    string_strategies: List[str] = field(default_factory=lambda: ["XorStringStrategy", "CharArrayStrategy"])
 
     # ordered list of stages; None means use DEFAULT_STAGE_ORDER
     stage_order: Optional[List[str]] = None
@@ -89,6 +94,9 @@ def _run_phase(stage_type: str, cfg_dict: dict, tree, naming, rng):
     elif stage_type == "numbers":
         for ns in cfg_dict.get("strategies", []):
             tree = NumberObscurerInjector(naming, _resolve(NumberObscureStrategy._registry, ns, "number"), rng).apply(tree)
+    elif stage_type == "strings":
+        for ss in cfg_dict.get("strategies", []):
+            tree = StringObfuscatorInjector(naming, _resolve(StringObscureStrategy._registry, ss, "string"), rng).apply(tree)
     elif stage_type == "renaming":
         tree = Renamer(naming.get_namespace(), rng).apply(tree)
     return tree
@@ -134,6 +142,10 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
         elif stage == "numbers" and cfg.enable_numbers and cfg.number_strategies:
             for ns in cfg.number_strategies:
                 tree = NumberObscurerInjector(naming, _resolve(NumberObscureStrategy._registry, ns, "number"), rng).apply(tree)
+
+        elif stage == "strings" and cfg.enable_strings and cfg.string_strategies:
+            for ss in cfg.string_strategies:
+                tree = StringObfuscatorInjector(naming, _resolve(StringObscureStrategy._registry, ss, "string"), rng).apply(tree)
 
         elif stage == "renaming" and cfg.enable_renaming:
             tree = Renamer(naming.get_namespace(), rng).apply(tree)

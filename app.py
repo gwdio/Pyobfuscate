@@ -12,6 +12,7 @@ from Injectors.junk_conditional_strategies import JunkConditionalStrategy
 from Injectors.junk_strategies import JunkInjectionStrategy
 from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Encryption.number_obscure_strategies import NumberObscureStrategy
+from Encryption.string_obscure_strategies import StringObscureStrategy
 from pipeline import DEFAULT_STAGE_ORDER, ObfuscationConfig, run_pipeline
 from Utils.input_guard import validate_input
 
@@ -23,6 +24,8 @@ _PACKAGE_FILES = [
     "Encryption/__init__.py",
     "Encryption/number_obscure_strategies.py",
     "Encryption/number_obscurer.py",
+    "Encryption/string_obscure_strategies.py",
+    "Encryption/string_obscurer.py",
     "Injectors/__init__.py",
     "Injectors/conditional_injector.py",
     "Injectors/identity_injector.py",
@@ -82,6 +85,8 @@ class ObfuscationRequest(BaseModel):
     conditional_strategies: List[str] = ["RandomConditionalStrategy"]
     identity_probability: float = 0.2
     number_strategies: List[str] = ["FeistelNumberStrategy", "XorStringNumberStrategy"]
+    enable_strings: bool = True
+    string_strategies: List[str] = ["XorStringStrategy", "CharArrayStrategy"]
 
     stage_order: Optional[List[str]] = Field(
         None,
@@ -110,6 +115,7 @@ def get_strategies():
         "loop": sorted(LoopObfuscationStrategy._registry),
         "identity": sorted(IdentityFuncStrategy._registry),
         "number": sorted(NumberObscureStrategy._registry),
+        "string": sorted(StringObscureStrategy._registry),
     }
 
 
