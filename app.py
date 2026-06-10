@@ -31,6 +31,7 @@ _PACKAGE_FILES = [
     "Injectors/import_obfuscator.py",
     "Injectors/identity_injector.py",
     "Injectors/identity_strategies.py",
+    "Injectors/bogus_function_injector.py",
     "Injectors/inject_junk.py",
     "Injectors/junk_conditional_strategies.py",
     "Injectors/junk_strategies.py",
@@ -86,6 +87,8 @@ class ObfuscationRequest(BaseModel):
     conditional_strategies: List[str] = ["RandomConditionalStrategy"]
     identity_probability: float = 0.2
     number_strategies: List[str] = ["FeistelNumberStrategy", "XorStringNumberStrategy"]
+    enable_bogus_functions: bool = True
+    bogus_function_density: int = 1
     enable_strings: bool = True
     string_strategies: List[str] = ["XorStringStrategy", "CharArrayStrategy"]
     enable_imports: bool = True

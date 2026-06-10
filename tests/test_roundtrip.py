@@ -199,6 +199,32 @@ def test_import_skips_star_and_relative(tmp_path):
     assert _run(mod) == _run(out_file)
 
 
+def test_bogus_functions_injected(tmp_path):
+    src = tmp_path / "funcs.py"
+    src.write_text("def foo():\n    return 1\ndef bar():\n    return 2\nprint(foo() + bar())\n", encoding="utf-8")
+    cfg = ObfuscationConfig(
+        input_path=src,
+        seed=42,
+        return_code=True,
+        enable_junk=False,
+        enable_loops=False,
+        enable_conditionals=False,
+        enable_identities=False,
+        enable_numbers=False,
+        enable_strings=False,
+        enable_imports=False,
+        enable_renaming=False,
+        bogus_function_density=2,
+    )
+    obfuscated = run_pipeline(cfg)
+    tree = __import__("ast").parse(obfuscated)
+    top_funcs = [n for n in tree.body if isinstance(n, __import__("ast").FunctionDef)]
+    assert len(top_funcs) >= 2 + 2 * 2  # 2 real + at least density*real bogus
+    out_file = tmp_path / "out.py"
+    out_file.write_text(obfuscated, encoding="utf-8")
+    assert _run(out_file) == "3\n"
+
+
 def test_collatz_iteration_count(tmp_path):
     n = 8
     src = tmp_path / "loop.py"

@@ -20,6 +20,7 @@ from Injectors.conditional_injector import ConditionalInjector
 from Injectors.import_obfuscator import ImportObfuscator
 from Injectors.identity_injector import IdentityFuncInjector
 from Injectors.identity_strategies import MixedIdentityStrategy
+from Injectors.bogus_function_injector import BogusFunctionInjector
 from Injectors.inject_junk import JunkInjector
 from Injectors.junk_conditional_strategies import JunkConditionalStrategy
 from Injectors.junk_strategies import JunkInjectionStrategy
@@ -28,7 +29,7 @@ from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Renaming.renamer import Renamer
 from NameTracker.naming import Naming
 
-DEFAULT_STAGE_ORDER = ["junk", "loops", "conditionals", "identities", "numbers", "strings", "imports", "renaming"]
+DEFAULT_STAGE_ORDER = ["junk", "bogus_functions", "loops", "conditionals", "identities", "numbers", "strings", "imports", "renaming"]
 
 
 @dataclass
@@ -52,6 +53,8 @@ class ObfuscationConfig:
     conditional_strategies: List[str] = field(default_factory=lambda: ["RandomConditionalStrategy"])
     identity_probability: float = 0.2
     number_strategies: List[str] = field(default_factory=lambda: ["FeistelNumberStrategy", "XorStringNumberStrategy"])
+    enable_bogus_functions: bool = True
+    bogus_function_density: int = 1
     enable_strings: bool = True
     string_strategies: List[str] = field(default_factory=lambda: ["XorStringStrategy", "CharArrayStrategy"])
     enable_imports: bool = True
@@ -81,6 +84,11 @@ def _run_phase(stage_type: str, cfg_dict: dict, tree, naming, rng):
         if strategies:
             selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in strategies]
             tree = JunkInjector(naming, selected, density, rng).apply(tree)
+    elif stage_type == "bogus_functions":
+        density = cfg_dict.get("density", 1)
+        strategy_names = cfg_dict.get("strategies", ["BitwiseStrategy", "NonConstantTimeStrategy", "ArithmeticStrategy"])
+        selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in strategy_names]
+        tree = BogusFunctionInjector(naming, selected, density, rng).apply(tree)
     elif stage_type == "loops":
         strategy_name = cfg_dict.get("strategy", "CollatzStrategy")
         loop_cls = _resolve(LoopObfuscationStrategy._registry, strategy_name, "loop")
@@ -131,6 +139,10 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
         if stage == "junk" and cfg.enable_junk and cfg.junk_strategies:
             selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in cfg.junk_strategies]
             tree = JunkInjector(naming, selected, cfg.junk_density, rng).apply(tree)
+
+        elif stage == "bogus_functions" and cfg.enable_bogus_functions and cfg.junk_strategies:
+            selected = [_resolve(JunkInjectionStrategy._registry, k, "junk") for k in cfg.junk_strategies]
+            tree = BogusFunctionInjector(naming, selected, cfg.bogus_function_density, rng).apply(tree)
 
         elif stage == "loops" and cfg.enable_loops:
             loop_cls = _resolve(LoopObfuscationStrategy._registry, cfg.loop_strategy, "loop")
