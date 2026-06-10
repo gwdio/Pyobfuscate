@@ -13,6 +13,7 @@ from Injectors.junk_strategies import JunkInjectionStrategy
 from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Encryption.number_obscure_strategies import NumberObscureStrategy
 from pipeline import DEFAULT_STAGE_ORDER, ObfuscationConfig, run_pipeline
+from Utils.input_guard import validate_input
 
 _BASE = Path(__file__).parent
 
@@ -114,6 +115,13 @@ def get_strategies():
 
 @app.post("/obfuscate", response_model=ObfuscationResponse)
 def obfuscate(req: ObfuscationRequest):
+    try:
+        source = Path(req.input_path).read_text(encoding="utf-8")
+        validate_input(source)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     cfg = ObfuscationConfig(**req.model_dump())
     try:
         transformed = run_pipeline(cfg)
