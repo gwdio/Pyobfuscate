@@ -32,6 +32,12 @@ const STAGE_CATALOG = {
     defaultConfig: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
     allStrategies: ['FeistelNumberStrategy', 'SimpleFeistelNumberStrategy', 'TemplateNumberStrategy', 'XorStringNumberStrategy'],
   },
+  strings: {
+    label: 'String Obfuscation',
+    description: 'Replaces string literals with chr()-array expressions or XOR-encrypted byte sequences decoded at runtime.',
+    defaultConfig: { strategies: ['XorStringStrategy', 'CharArrayStrategy'] },
+    allStrategies: ['CharArrayStrategy', 'XorStringStrategy'],
+  },
   renaming: {
     label: 'Renaming',
     description: 'Replaces all user-defined identifiers with random 8-character names.',
@@ -64,6 +70,11 @@ const STAGE_PRESETS = {
     light:  { strategies: ['FeistelNumberStrategy'] },
     medium: { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy'] },
     heavy:  { strategies: ['FeistelNumberStrategy', 'XorStringNumberStrategy', 'SimpleFeistelNumberStrategy'] },
+  },
+  strings: {
+    light:  { strategies: ['CharArrayStrategy'] },
+    medium: { strategies: ['XorStringStrategy'] },
+    heavy:  { strategies: ['XorStringStrategy', 'CharArrayStrategy'] },
   },
 };
 
@@ -117,6 +128,16 @@ class MyNumberStrategy(NumberObscureStrategy):
         # Return an AST expression that evaluates to value.
         # Use self.rng for randomness; self.naming.get_name() for unique variable names.
         return ast.Constant(value=value)`,
+  strings: `from Encryption.string_obscure_strategies import StringObscureStrategy
+import ast
+
+class MyStringStrategy(StringObscureStrategy):
+    # __init__ inherited: sets self.naming and self.rng
+
+    def obfuscate(self, value: str) -> ast.expr:
+        # Return an AST expression that evaluates to value.
+        # Use self.rng for randomness; self.naming.get_name() for unique variable names.
+        return ast.Constant(value=value)`,
 };
 
 let _nextId = 0;
@@ -135,7 +156,7 @@ function makeInstance(configType) {
 }
 
 function initStages() {
-  return ['junk', 'loops', 'conditionals', 'identities', 'numbers', 'renaming'].map(makeInstance);
+  return ['junk', 'loops', 'conditionals', 'identities', 'numbers', 'strings', 'renaming'].map(makeInstance);
 }
 
 const state = {
@@ -203,6 +224,10 @@ function makeSummary(stage) {
     case 'identities':
       return `prob ${(c.probability ?? 0.2).toFixed(2)}`;
     case 'numbers': {
+      const names = (c.strategies || []).map(shorten).join(', ');
+      return names || 'none';
+    }
+    case 'strings': {
       const names = (c.strategies || []).map(shorten).join(', ');
       return names || 'none';
     }
@@ -305,6 +330,19 @@ function renderConfigHTML(stage) {
           ${(stage.allStrategies || []).map(s => `
             <button class="stage-chip${(c.strategies||[]).includes(s) ? ' active' : ''}"
                     data-chip="num_strategy" data-iid="${iid}" data-value="${s}">
+              ${s.replace('Strategy', '')}
+            </button>
+          `).join('')}
+        </div>`;
+
+    case 'strings':
+      return `${descEl}
+        ${presetRow}
+        <div class="config-row chip-row">
+          <span class="row-label">Strategies:</span>
+          ${(stage.allStrategies || []).map(s => `
+            <button class="stage-chip${(c.strategies||[]).includes(s) ? ' active' : ''}"
+                    data-chip="str_strategy" data-iid="${iid}" data-value="${s}">
               ${s.replace('Strategy', '')}
             </button>
           `).join('')}
@@ -790,11 +828,13 @@ from Injectors.junk_strategies import JunkInjectionStrategy
 from Injectors.junk_conditional_strategies import JunkConditionalStrategy
 from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Encryption.number_obscure_strategies import NumberObscureStrategy
+from Encryption.string_obscure_strategies import StringObscureStrategy
 json.dumps({
     'junk': sorted(k for k in JunkInjectionStrategy._registry if k != 'JunkInjectionStrategy'),
     'conditional': sorted(k for k in JunkConditionalStrategy._registry if k != 'JunkConditionalStrategy'),
     'loop': sorted(k for k in LoopObfuscationStrategy._registry if k != 'LoopObfuscationStrategy'),
     'number': sorted(k for k in NumberObscureStrategy._registry if k != 'NumberObscureStrategy'),
+    'string': sorted(k for k in StringObscureStrategy._registry if k != 'StringObscureStrategy'),
 })
 `);
 
@@ -805,6 +845,7 @@ json.dumps({
     if (stage.configType === 'loops')        stage.allStrategies = reg.loop;
     if (stage.configType === 'conditionals') stage.allStrategies = reg.conditional;
     if (stage.configType === 'numbers')      stage.allStrategies = reg.number;
+    if (stage.configType === 'strings')      stage.allStrategies = reg.string;
   });
 
   renderStages();
@@ -868,6 +909,7 @@ function init() {
     loops: 'Loop Obfuscation',
     identities: 'Identity Injection',
     numbers: 'Number Obfuscation',
+    strings: 'String Obfuscation',
   };
   $('template-content').innerHTML = Object.entries(STRATEGY_TEMPLATES)
     .map(([k, t]) => `<p class="tmpl-label">${tmplLabels[k]}</p><pre>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`)

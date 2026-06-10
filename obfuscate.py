@@ -63,6 +63,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=["FeistelNumberStrategy", "XorStringNumberStrategy"],
         help="Number obfuscation strategy class names",
     )
+    p.add_argument("--no-strings", dest="enable_strings", action="store_false", help="Skip string obfuscation")
+    p.add_argument(
+        "--string-strategies",
+        nargs="+",
+        metavar="NAME",
+        default=["XorStringStrategy", "CharArrayStrategy"],
+        help="String obfuscation strategy class names",
+    )
 
     return p
 
@@ -88,6 +96,8 @@ def main():
         loop_strategy=args.loop_strategy,
         conditional_strategies=args.conditional_strategies,
         number_strategies=args.number_strategies,
+        enable_strings=args.enable_strings,
+        string_strategies=args.string_strategies,
         return_code=args.print_output,
     )
 

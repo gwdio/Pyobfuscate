@@ -15,6 +15,8 @@ PACKAGE_FILES = [
     "Encryption/__init__.py",
     "Encryption/number_obscure_strategies.py",
     "Encryption/number_obscurer.py",
+    "Encryption/string_obscure_strategies.py",
+    "Encryption/string_obscurer.py",
     "Injectors/__init__.py",
     "Injectors/conditional_injector.py",
     "Injectors/identity_injector.py",
