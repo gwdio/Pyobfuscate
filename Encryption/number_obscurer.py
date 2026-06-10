@@ -20,8 +20,8 @@ class NumberObscurerInjector(ast.NodeTransformer):
         self.strategy = strategy_class(naming, rng)
 
     def visit_Constant(self, node: ast.Constant) -> ast.AST:
-        # Only replace integer literals
-        if isinstance(node.value, int):
+        # Only replace integer literals; bool is a subclass of int so exclude it.
+        if isinstance(node.value, int) and not isinstance(node.value, bool):
             new_expr = self.strategy.obfuscate(node.value)
             return ast.copy_location(new_expr, node)
         return node

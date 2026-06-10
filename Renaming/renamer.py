@@ -18,6 +18,7 @@ class Renamer(ast.NodeTransformer):
         self.to_rename: Set[str] = set()
         self.method_names: Set[str] = set()
         self.mapping: Dict[str, str] = {}
+        self._scope_stack: list = []  # 'class' or 'function'
 
     def _generate_name(self) -> str:
         """Produce a valid Python identifier not in self.namespace or already mapped."""
@@ -35,7 +36,10 @@ class Renamer(ast.NodeTransformer):
             self.to_rename.add(node.name)
         for arg in node.args.args:
             self.to_rename.add(arg.arg)
-        return self.generic_visit(node)
+        self._scope_stack.append('function')
+        result = self.generic_visit(node)
+        self._scope_stack.pop()
+        return result
 
     def visit_ClassDef(self, node: ast.ClassDef):
         self.to_rename.add(node.name)
@@ -46,7 +50,10 @@ class Renamer(ast.NodeTransformer):
                 name = item.name
                 if not (name.startswith('__') and name.endswith('__')):
                     self.method_names.add(name)
-        return self.generic_visit(node)
+        self._scope_stack.append('class')
+        result = self.generic_visit(node)
+        self._scope_stack.pop()
+        return result
 
     def visit_Lambda(self, node: ast.Lambda):
         for arg in node.args.args:
@@ -54,9 +61,12 @@ class Renamer(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name):
-        # any name *defined* (Store) should be collected
+        # any name *defined* (Store) should be collected, except class-level
+        # attribute assignments — those are accessed via obj.attr and renaming
+        # them would break attribute access sites we can't statically track.
         if isinstance(node.ctx, ast.Store):
-            self.to_rename.add(node.id)
+            if not (self._scope_stack and self._scope_stack[-1] == 'class'):
+                self.to_rename.add(node.id)
         return node
 
     # ——— APPLY builds mapping then does a second pass ———
@@ -105,7 +115,11 @@ class _Rewriter(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_Global(self, node: ast.Global):
-        # ast.Global stores plain strings, not ast.Name nodes — rename them explicitly.
+        # ast.Global/Nonlocal store plain strings, not ast.Name nodes — rename explicitly.
+        node.names = [self.mapping.get(n, n) for n in node.names]
+        return node
+
+    def visit_Nonlocal(self, node: ast.Nonlocal):
         node.names = [self.mapping.get(n, n) for n in node.names]
         return node
 
