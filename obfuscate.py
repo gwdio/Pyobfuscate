@@ -64,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number obfuscation strategy class names",
     )
     p.add_argument("--no-strings", dest="enable_strings", action="store_false", help="Skip string obfuscation")
+    p.add_argument("--no-imports", dest="enable_imports", action="store_false", help="Skip import obfuscation")
     p.add_argument(
         "--string-strategies",
         nargs="+",
@@ -98,6 +99,7 @@ def main():
         number_strategies=args.number_strategies,
         enable_strings=args.enable_strings,
         string_strategies=args.string_strategies,
+        enable_imports=args.enable_imports,
         return_code=args.print_output,
     )
 

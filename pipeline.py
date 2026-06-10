@@ -17,6 +17,7 @@ from Encryption.number_obscurer import NumberObscurerInjector
 from Encryption.string_obscure_strategies import StringObscureStrategy
 from Encryption.string_obscurer import StringObfuscatorInjector
 from Injectors.conditional_injector import ConditionalInjector
+from Injectors.import_obfuscator import ImportObfuscator
 from Injectors.identity_injector import IdentityFuncInjector
 from Injectors.identity_strategies import MixedIdentityStrategy
 from Injectors.inject_junk import JunkInjector
@@ -27,7 +28,7 @@ from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Renaming.renamer import Renamer
 from NameTracker.naming import Naming
 
-DEFAULT_STAGE_ORDER = ["junk", "loops", "conditionals", "identities", "numbers", "strings", "renaming"]
+DEFAULT_STAGE_ORDER = ["junk", "loops", "conditionals", "identities", "numbers", "strings", "imports", "renaming"]
 
 
 @dataclass
@@ -53,6 +54,7 @@ class ObfuscationConfig:
     number_strategies: List[str] = field(default_factory=lambda: ["FeistelNumberStrategy", "XorStringNumberStrategy"])
     enable_strings: bool = True
     string_strategies: List[str] = field(default_factory=lambda: ["XorStringStrategy", "CharArrayStrategy"])
+    enable_imports: bool = True
 
     # ordered list of stages; None means use DEFAULT_STAGE_ORDER
     stage_order: Optional[List[str]] = None
@@ -97,6 +99,8 @@ def _run_phase(stage_type: str, cfg_dict: dict, tree, naming, rng):
     elif stage_type == "strings":
         for ss in cfg_dict.get("strategies", []):
             tree = StringObfuscatorInjector(naming, _resolve(StringObscureStrategy._registry, ss, "string"), rng).apply(tree)
+    elif stage_type == "imports":
+        tree = ImportObfuscator(naming, rng).apply(tree)
     elif stage_type == "renaming":
         tree = Renamer(naming.get_namespace(), rng).apply(tree)
     return tree
@@ -146,6 +150,9 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
         elif stage == "strings" and cfg.enable_strings and cfg.string_strategies:
             for ss in cfg.string_strategies:
                 tree = StringObfuscatorInjector(naming, _resolve(StringObscureStrategy._registry, ss, "string"), rng).apply(tree)
+
+        elif stage == "imports" and cfg.enable_imports:
+            tree = ImportObfuscator(naming, rng).apply(tree)
 
         elif stage == "renaming" and cfg.enable_renaming:
             tree = Renamer(naming.get_namespace(), rng).apply(tree)

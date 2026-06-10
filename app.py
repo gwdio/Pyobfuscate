@@ -28,6 +28,7 @@ _PACKAGE_FILES = [
     "Encryption/string_obscurer.py",
     "Injectors/__init__.py",
     "Injectors/conditional_injector.py",
+    "Injectors/import_obfuscator.py",
     "Injectors/identity_injector.py",
     "Injectors/identity_strategies.py",
     "Injectors/inject_junk.py",
@@ -87,6 +88,7 @@ class ObfuscationRequest(BaseModel):
     number_strategies: List[str] = ["FeistelNumberStrategy", "XorStringNumberStrategy"]
     enable_strings: bool = True
     string_strategies: List[str] = ["XorStringStrategy", "CharArrayStrategy"]
+    enable_imports: bool = True
 
     stage_order: Optional[List[str]] = Field(
         None,

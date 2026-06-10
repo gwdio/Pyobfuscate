@@ -129,6 +129,76 @@ def test_string_docstring_preserved(tmp_path):
     assert _run(src) == _run(out_file)
 
 
+def test_import_obfuscation(tmp_path):
+    src = tmp_path / "imp.py"
+    src.write_text(
+        "import os\n"
+        "import os.path\n"
+        "import sys as system\n"
+        "from pathlib import Path\n"
+        "from collections import OrderedDict as OD\n"
+        "from json import dumps, loads\n"
+        "print(os.sep)\n"
+        "print(os.path.join('a', 'b'))\n"
+        "print(system.version_info[0])\n"
+        "print(Path('/tmp').name)\n"
+        "d = OD([('x', 1), ('y', 2)])\n"
+        "print(list(d.keys()))\n"
+        "data = dumps({'k': 'v'})\n"
+        "print(loads(data)['k'])\n",
+        encoding="utf-8",
+    )
+    cfg = ObfuscationConfig(
+        input_path=src,
+        seed=42,
+        return_code=True,
+        enable_junk=False,
+        enable_loops=False,
+        enable_conditionals=False,
+        enable_identities=False,
+        enable_numbers=False,
+        enable_strings=False,
+        enable_imports=True,
+        enable_renaming=False,
+    )
+    obfuscated = run_pipeline(cfg)
+    assert "import " not in obfuscated
+    assert "__import__" in obfuscated
+    out_file = tmp_path / "out.py"
+    out_file.write_text(obfuscated, encoding="utf-8")
+    assert _run(src) == _run(out_file)
+
+
+def test_import_skips_star_and_relative(tmp_path):
+    src = tmp_path / "pkg" / "__init__.py"
+    src.parent.mkdir()
+    src.write_text("", encoding="utf-8")
+    mod = tmp_path / "pkg" / "mod.py"
+    mod.write_text(
+        "from os.path import *\n"
+        "print(join('a', 'b'))\n",
+        encoding="utf-8",
+    )
+    cfg = ObfuscationConfig(
+        input_path=mod,
+        seed=42,
+        return_code=True,
+        enable_junk=False,
+        enable_loops=False,
+        enable_conditionals=False,
+        enable_identities=False,
+        enable_numbers=False,
+        enable_strings=False,
+        enable_imports=True,
+        enable_renaming=False,
+    )
+    obfuscated = run_pipeline(cfg)
+    assert "from os.path import *" in obfuscated
+    out_file = tmp_path / "out.py"
+    out_file.write_text(obfuscated, encoding="utf-8")
+    assert _run(mod) == _run(out_file)
+
+
 def test_collatz_iteration_count(tmp_path):
     n = 8
     src = tmp_path / "loop.py"
