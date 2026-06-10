@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Snake curled in on itself: a thick arc looping back, tail piercing the loop -->
+  <!-- Outer arc: ~300° clockwise from top-right, ending bottom-left -->
+  <path d="M 24 8
+             A 11 11 0 1 1 8 24"
+        fill="none" stroke="#4ade80" stroke-width="4" stroke-linecap="round"/>
+  <!-- Tail continues inward through the gap, curling toward center -->
+  <path d="M 8 24 Q 12 28 16 22 Q 19 17 16 14"
+        fill="none" stroke="#4ade80" stroke-width="4" stroke-linecap="round"/>
+  <!-- Arrowhead at the head (near 24,8), pointing inward along the arc tangent -->
+  <polygon points="24,8 19,5 21,11" fill="#4ade80"/>
+</svg>

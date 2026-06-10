@@ -937,7 +937,16 @@ function init() {
 
   $('copy-btn').addEventListener('click', () => {
     const text = $('output').value;
-    if (text) navigator.clipboard.writeText(text).catch(() => {});
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = $('copy-btn');
+      btn.textContent = 'Copied';
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.disabled = false;
+      }, 1500);
+    }).catch(() => {});
   });
 
   $('custom-upload').addEventListener('change', e => {
