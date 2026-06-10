@@ -1,6 +1,6 @@
 # Pyobfuscate
 
-A modular Python code-obfuscation toolkit that transforms input scripts into functionally equivalent but harder-to-read output. It applies a sequence of injectors and renaming passes to obscure logic, control flow, and numeric constants. The toolkit is configurable and extensible via strategy plug-ins.
+A modular Python code-obfuscation toolkit that transforms input scripts into functionally equivalent but harder-to-read output. It applies a sequence of injectors and renaming passes to obscure logic, control flow, numeric constants, and string literals. The toolkit is configurable and extensible via strategy plug-ins.
 
 Runs entirely in your browser via Pyodide, or against a hosted API. Nothing leaves your machine unless you choose otherwise.
 
@@ -11,8 +11,12 @@ Runs entirely in your browser via Pyodide, or against a hosted API. Nothing leav
 * **Feistel-encoded integer constants** — a 4-round Feistel cipher scrambles integer literals into runtime expressions
 * **Opaque always-true conditionals** — statements wrapped in conditions that static analysis cannot resolve
 * **Identity function injection** — expressions buried in identity wrappers (e.g. `1 and x`)
+* **String literal obfuscation** — strings encoded as XOR byte sequences (with injected decoder) or `chr()` chains
+* **Bogus function injection** — dead, never-called functions inserted at module scope to bulk up and confuse the symbol table
+* **Import obfuscation** — `import foo` statements rewritten to `foo = __import__('foo')` calls
 * **Junk statement injection** — dead arithmetic and bitwise noise
 * **Full identifier renaming** — all user-defined names replaced with random 8-char strings
+* **Input size/depth guard** — rejects inputs over 50 KB, 2 000 lines, or nesting depth 200
 * **Composable, orderable pipeline** — toggle and reorder stages, run a stage multiple times
 * **Reproducible output** — optional integer seed for deterministic runs
 * **Custom strategy plug-ins** — implement your own obfuscation pass and load it from the UI
@@ -57,17 +61,22 @@ This means seed determination is linear in the prefix length, not in the seed sp
 project-root/
 ├── Encryption/number_obscure_strategies.py
 ├── Encryption/number_obscurer.py
+├── Encryption/string_obscure_strategies.py
+├── Encryption/string_obscurer.py
+├── Injectors/bogus_function_injector.py
 ├── Injectors/conditional_injector.py
 ├── Injectors/identity_injector.py
+├── Injectors/identity_strategies.py
+├── Injectors/import_obfuscator.py
 ├── Injectors/inject_junk.py
 ├── Injectors/junk_conditional_strategies.py
 ├── Injectors/junk_strategies.py
-├── Injectors/identity_strategies.py
 ├── LoopObfuscation/ob_for.py
 ├── LoopObfuscation/obfuscation_strategies.py
 ├── LoopObfuscation/collatz_seed.py
 ├── Renaming/renamer.py
 ├── NameTracker/naming.py
+├── Utils/input_guard.py
 ├── IO/input.py
 ├── IO/output.py
 ├── obfuscate.py          # CLI
@@ -139,6 +148,11 @@ uvicorn app:app --reload
   "conditional_strategies": ["random"],
   "identity_probability": 0.2,
   "number_strategies": ["feistel", "xor_string"],
+  "enable_bogus_functions": true,
+  "bogus_function_density": 1,
+  "enable_strings": true,
+  "string_strategies": ["XorStringStrategy", "CharArrayStrategy"],
+  "enable_imports": true,
   "return_code": false,
   "seed": 42
 }
@@ -166,6 +180,11 @@ If `return_code` is `true` or `output_path` is omitted, `code` contains the tran
 * **conditional_strategies**: Currently `["random"]`.
 * **identity_probability** *(float 0–1)*: Frequency of identity wrappers.
 * **number_strategies**: Any ordered subset of `["feistel","xor_string","simple_feistel"]`.
+* **enable_bogus_functions** *(bool)*: Inject dead, never-called functions at module scope.
+* **bogus_function_density** *(int)*: How many bogus functions to inject.
+* **enable_strings** *(bool)*: Obfuscate string literals.
+* **string_strategies**: Ordered subset of `["XorStringStrategy","CharArrayStrategy"]`.
+* **enable_imports** *(bool)*: Rewrite `import` statements as `__import__()` calls.
 * **return_code** *(bool)*: Include transformed code in the response.
 * **seed** *(int)*: Makes a run repeatable.
 
