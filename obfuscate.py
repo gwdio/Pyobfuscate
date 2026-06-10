@@ -63,6 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=["FeistelNumberStrategy", "XorStringNumberStrategy"],
         help="Number obfuscation strategy class names",
     )
+    p.add_argument("--no-bogus-functions", dest="enable_bogus_functions", action="store_false", help="Skip bogus function injection")
+    p.add_argument("--bogus-function-density", type=int, default=1, metavar="N", choices=range(1, 6), help="Bogus functions per real function 1–5 (default: 1)")
     p.add_argument("--no-strings", dest="enable_strings", action="store_false", help="Skip string obfuscation")
     p.add_argument("--no-imports", dest="enable_imports", action="store_false", help="Skip import obfuscation")
     p.add_argument(
@@ -97,6 +99,8 @@ def main():
         loop_strategy=args.loop_strategy,
         conditional_strategies=args.conditional_strategies,
         number_strategies=args.number_strategies,
+        enable_bogus_functions=args.enable_bogus_functions,
+        bogus_function_density=args.bogus_function_density,
         enable_strings=args.enable_strings,
         string_strategies=args.string_strategies,
         enable_imports=args.enable_imports,

@@ -48,12 +48,13 @@ Both the CLI (`obfuscate.py`) and API (`app.py`) run the same ordered pipeline:
 1. `ast.parse()` — source → AST
 2. `Naming.analyze()` — collect all identifiers for collision avoidance
 3. `JunkInjector` — insert meaningless statements (30% per insertion point)
-4. `Ob_For` — convert `for` loops to `while` loops with complex iteration logic
-5. `ConditionalInjector` — wrap statements in always-true conditionals (30% chance)
-6. `IdentityFuncInjector` — wrap expressions in identity operations (e.g., `1 and x`)
-7. `NumberObscurerInjector` (×2 passes) — encode integer literals with cipher strategies
-8. `Renamer` — replace all user-defined names with random 8-char identifiers
-9. `ast.unparse()` — AST → obfuscated source string
+4. `BogusFunctionInjector` — inject dead, never-called functions at module scope
+5. `Ob_For` — convert `for` loops to `while` loops with complex iteration logic
+6. `ConditionalInjector` — wrap statements in always-true conditionals (30% chance)
+7. `IdentityFuncInjector` — wrap expressions in identity operations (e.g., `1 and x`)
+8. `NumberObscurerInjector` (×2 passes) — encode integer literals with cipher strategies
+9. `Renamer` — replace all user-defined names with random 8-char identifiers
+10. `ast.unparse()` — AST → obfuscated source string
 
 ### Strategy Pattern
 
@@ -73,6 +74,7 @@ Key strategy families:
 | `NameTracker/naming.py` | Tracks all identifiers in the AST; `get_name(base)` generates unique names |
 | `Renaming/renamer.py` | Two-pass rewrite: collect all defined names, then rewrite all references |
 | `Injectors/inject_junk.py` | Injects junk statements into Module and FunctionDef bodies |
+| `Injectors/bogus_function_injector.py` | Injects dead, never-called functions at module scope |
 | `Injectors/identity_injector.py` | Wraps `Name` and `Constant` nodes in identity operations |
 | `Injectors/conditional_injector.py` | Wraps statements in opaque always-true predicates |
 | `LoopObfuscation/ob_for.py` | Orchestrates for→while: unwraps nested loops, then applies strategy |
@@ -85,11 +87,9 @@ The API wraps pipeline execution in `_PIPELINE_LOCK` (threading lock) to prevent
 
 ## Active Development
 
-Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe, usability-docs, plan-3-collatz-linear, plan-4-collatz-seed, plan-depth-size-guard, plan-string-obfuscation, plan-import-obfuscation.
+Planned work is tracked in `plans/`. Completed plans (merged to main): deploy, randomness, renamer-fix, testing, ui-improvements, pipeline-recipe, usability-docs, plan-3-collatz-linear, plan-4-collatz-seed, plan-depth-size-guard, plan-string-obfuscation, plan-import-obfuscation, plan-bogus-functions.
 
-Remaining plans:
-
-- `plans/plan-bogus-functions.md` — inject dead functions at module level
+Remaining plans: none.
 
 ## Branch Convention
 

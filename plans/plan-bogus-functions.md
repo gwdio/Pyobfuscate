@@ -1,4 +1,4 @@
-# Plan: Bogus Function Injection
+# Plan: Bogus Function Injection [DONE]
 
 ## Current State
 
