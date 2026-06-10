@@ -35,29 +35,7 @@ locals {
   }
 
   # Python source files bundled for Pyodide (client-side execution)
-  pyodide_package_files = [
-    "pipeline.py",
-    "Encryption/__init__.py",
-    "Encryption/number_obscure_strategies.py",
-    "Encryption/number_obscurer.py",
-    "Injectors/__init__.py",
-    "Injectors/conditional_injector.py",
-    "Injectors/identity_injector.py",
-    "Injectors/identity_strategies.py",
-    "Injectors/inject_junk.py",
-    "Injectors/junk_conditional_strategies.py",
-    "Injectors/junk_strategies.py",
-    "LoopObfuscation/__init__.py",
-    "LoopObfuscation/for_to_while_generic.py",
-    "LoopObfuscation/loop_simplifier.py",
-    "LoopObfuscation/ob_for.py",
-    "LoopObfuscation/obfuscation_strategies.py",
-    "NameTracker/__init__.py",
-    "NameTracker/naming.py",
-    "Renaming/__init__.py",
-    "Renaming/renamer.py",
-    "Utils/__init__.py",
-  ]
+  pyodide_package_files = jsondecode(file("${path.module}/../pyodide_files.json"))
 }
 
 # ── IAM ──────────────────────────────────────────────────────────────────────
@@ -385,7 +363,7 @@ resource "aws_cloudfront_distribution" "main" {
 # ── Frontend assets → S3 ─────────────────────────────────────────────────────
 
 resource "aws_s3_object" "frontend" {
-  for_each = fileset(local.frontend_dir, "**")
+  for_each = setsubtract(fileset(local.frontend_dir, "**"), ["package.json"])
 
   bucket       = aws_s3_bucket.frontend.id
   key          = each.value
@@ -406,12 +384,17 @@ resource "aws_s3_object" "package_json" {
   etag = md5(jsonencode({
     for f in local.pyodide_package_files : f => file("${path.module}/../${f}")
   }))
+
+  depends_on = [aws_s3_object.frontend]
 }
 
 # ── CloudFront cache invalidation ────────────────────────────────────────────
 
 resource "terraform_data" "frontend_invalidation" {
-  triggers_replace = [for obj in aws_s3_object.frontend : obj.etag]
+  triggers_replace = concat(
+    [for obj in aws_s3_object.frontend : obj.etag],
+    [aws_s3_object.package_json.etag],
+  )
 
   provisioner "local-exec" {
     command = "aws cloudfront create-invalidation --distribution-id ${aws_cloudfront_distribution.main.id} --paths '/*'"
