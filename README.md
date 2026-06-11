@@ -15,7 +15,7 @@ Runs entirely in your browser via Pyodide, or against a hosted API. Nothing leav
 * **Bogus function injection** — dead, never-called functions inserted at module scope to bulk up and confuse the symbol table
 * **Import obfuscation** — `import foo` statements rewritten to `foo = __import__('foo')` calls
 * **Junk statement injection** — dead arithmetic and bitwise noise
-* **Full identifier renaming** — all user-defined names replaced with random 8-char strings
+* **Composable identifier renaming** — pluggable base generators (random, homoglyph ASCII, anti-chatbot prompt-injection payloads, reversed foreign-language words) combined with optional modifiers (Unicode homoglyph substitution, stacked diacritical marks); bases and modifiers stack freely
 * **Input size/depth guard** — rejects inputs over 50 KB, 2 000 lines, or nesting depth 200
 * **Composable, orderable pipeline** — toggle and reorder stages, run a stage multiple times
 * **Reproducible output** — optional integer seed for deterministic runs
@@ -55,6 +55,30 @@ This means seed determination is linear in the prefix length, not in the seed sp
 > - Cao, Y., Zhou, Z., & Zhuang, Y. (2025). Advancing code obfuscation: Novel opaque predicate techniques to counter dynamic symbolic execution. *Computers, Materials & Continua, 84*(1), 1545–1565. https://doi.org/10.32604/cmc.2025.062743
 > - Xu, H., Zhou, Y., Kang, Y., Tu, F., & Lyu, M. R. (2018). Manufacturing resilient bi-opaque predicates against symbolic execution. In *2018 48th Annual IEEE/IFIP International Conference on Dependable Systems and Networks (DSN)* (pp. 666–677). IEEE. https://doi.org/10.1109/DSN.2018.00073
 
+## Identifier Renaming Strategies
+
+The renaming stage uses a composable two-layer design. Pick a **base generator** and optionally stack one or more **modifiers** on top.
+
+### Base generators
+
+| Strategy | Output |
+|---|---|
+| `RandomBaseStrategy` | 8-char random alphanumeric identifiers (default) |
+| `HomoglyphAsciiBaseStrategy` | Names built from visually similar ASCII chars (`l`, `I`, `1`, `O`, `0`) |
+| `AntiChatbotBaseStrategy` | Prompt-injection payloads as valid Python identifiers — activates when an LLM reads the source |
+| `ForeignLanguageBaseStrategy` | Reversed Russian words; look vaguely word-shaped but in no recognisable language |
+
+### Modifiers
+
+| Modifier | Effect |
+|---|---|
+| `HomoglyphUnicodeModifier` | Replaces Latin letters with visually identical Cyrillic/Greek lookalikes; always substitutes at least one char |
+| `DiacriticChaosModifier` | Stacks combining diacritical marks on random characters; survives Python's NFKC identifier normalization |
+
+Modifiers are applied after the base and before the collision check, so any combination is safe. Bases also work standalone without modifiers.
+
+Custom bases and modifiers can be uploaded as `.py` files from the browser UI — see the **Custom Strategy** templates.
+
 ## Project Structure
 
 ```
@@ -75,6 +99,7 @@ project-root/
 ├── LoopObfuscation/obfuscation_strategies.py
 ├── LoopObfuscation/collatz_seed.py
 ├── Renaming/renamer.py
+├── Renaming/naming_strategies.py
 ├── NameTracker/naming.py
 ├── Utils/input_guard.py
 ├── IO/input.py
