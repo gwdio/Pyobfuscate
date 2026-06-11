@@ -11,6 +11,7 @@ import Injectors.junk_strategies as _junk_strats
 import Injectors.junk_conditional_strategies as _cond_strats
 import Injectors.identity_strategies as _id_strats
 import LoopObfuscation.obfuscation_strategies as _loop_strats
+import Renaming.naming_strategies as _naming_strats
 
 from Encryption.number_obscure_strategies import NumberObscureStrategy
 from Encryption.number_obscurer import NumberObscurerInjector
@@ -27,6 +28,7 @@ from Injectors.junk_strategies import JunkInjectionStrategy
 from LoopObfuscation.ob_for import Ob_For
 from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Renaming.renamer import Renamer
+from Renaming.naming_strategies import BaseNamingStrategy, NameModifier, CompositeNamingStrategy
 from NameTracker.naming import Naming
 
 DEFAULT_STAGE_ORDER = ["junk", "bogus_functions", "loops", "conditionals", "identities", "numbers", "strings", "imports", "renaming"]
@@ -110,7 +112,12 @@ def _run_phase(stage_type: str, cfg_dict: dict, tree, naming, rng):
     elif stage_type == "imports":
         tree = ImportObfuscator(naming, rng).apply(tree)
     elif stage_type == "renaming":
-        tree = Renamer(naming.get_namespace(), rng).apply(tree)
+        base_name = cfg_dict.get("base", "RandomBaseStrategy")
+        modifier_names = cfg_dict.get("modifiers", [])
+        base = _resolve(BaseNamingStrategy._registry, base_name, "naming base")()
+        modifiers = [_resolve(NameModifier._registry, m, "naming modifier")() for m in modifier_names]
+        tree = Renamer(naming.get_namespace(), rng,
+                       strategy=CompositeNamingStrategy(base, modifiers)).apply(tree)
     return tree
 
 
@@ -167,7 +174,7 @@ def run_pipeline(cfg: ObfuscationConfig) -> str:
             tree = ImportObfuscator(naming, rng).apply(tree)
 
         elif stage == "renaming" and cfg.enable_renaming:
-            tree = Renamer(naming.get_namespace(), rng).apply(tree)
+            tree = Renamer(naming.get_namespace(), rng).apply(tree)  # legacy path: always RandomNameStrategy
 
     tree = ast.fix_missing_locations(tree)
     return ast.unparse(tree)

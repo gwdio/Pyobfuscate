@@ -1,7 +1,8 @@
 import ast
 import random
-import string
-from typing import Set, Dict
+from typing import Set, Dict, Optional
+
+from Renaming.naming_strategies import NamingStrategy, CompositeNamingStrategy, RandomBaseStrategy
 
 
 class Renamer(ast.NodeTransformer):
@@ -11,23 +12,18 @@ class Renamer(ast.NodeTransformer):
     3) Rewrite the entire AST, replacing all occurrences.
     """
 
-    def __init__(self, namespace: Set[str], rng: random.Random):
+    def __init__(self, namespace: Set[str], rng: random.Random, strategy: Optional[NamingStrategy] = None):
         # avoid colliding with any existing names
         self.namespace = set(namespace)
         self.rng = rng
+        self.strategy = strategy or CompositeNamingStrategy(RandomBaseStrategy(), [])
         self.to_rename: Set[str] = set()
         self.method_names: Set[str] = set()
         self.mapping: Dict[str, str] = {}
         self._scope_stack: list = []  # 'class' or 'function'
 
     def _generate_name(self) -> str:
-        """Produce a valid Python identifier not in self.namespace or already mapped."""
-        while True:
-            name = self.rng.choice(string.ascii_letters + "_") + \
-                   "".join(self.rng.choices(string.ascii_letters + string.digits + "_", k=7))
-            if name.isidentifier() and name not in self.namespace and name not in self.mapping.values():
-                self.namespace.add(name)
-                return name
+        return self.strategy.generate(self.namespace, self.rng)
 
     # ——— PASS 1: COLLECT ———
 
