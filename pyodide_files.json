@@ -22,6 +22,7 @@
   "NameTracker/__init__.py",
   "NameTracker/naming.py",
   "Renaming/__init__.py",
+  "Renaming/naming_strategies.py",
   "Renaming/renamer.py",
   "Utils/__init__.py",
   "Utils/input_guard.py",

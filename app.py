@@ -16,37 +16,12 @@ from Encryption.string_obscure_strategies import StringObscureStrategy
 from pipeline import DEFAULT_STAGE_ORDER, ObfuscationConfig, run_pipeline
 from Utils.input_guard import validate_input
 
+import json
+
 _BASE = Path(__file__).parent
 
-# Files shipped to Pyodide's virtual FS for client-side execution
-_PACKAGE_FILES = [
-    "pipeline.py",
-    "Encryption/__init__.py",
-    "Encryption/number_obscure_strategies.py",
-    "Encryption/number_obscurer.py",
-    "Encryption/string_obscure_strategies.py",
-    "Encryption/string_obscurer.py",
-    "Injectors/__init__.py",
-    "Injectors/conditional_injector.py",
-    "Injectors/import_obfuscator.py",
-    "Injectors/identity_injector.py",
-    "Injectors/identity_strategies.py",
-    "Injectors/bogus_function_injector.py",
-    "Injectors/inject_junk.py",
-    "Injectors/junk_conditional_strategies.py",
-    "Injectors/junk_strategies.py",
-    "LoopObfuscation/__init__.py",
-    "LoopObfuscation/collatz_seed.py",
-    "LoopObfuscation/for_to_while_generic.py",
-    "LoopObfuscation/loop_simplifier.py",
-    "LoopObfuscation/ob_for.py",
-    "LoopObfuscation/obfuscation_strategies.py",
-    "NameTracker/__init__.py",
-    "NameTracker/naming.py",
-    "Renaming/__init__.py",
-    "Renaming/renamer.py",
-    "Utils/__init__.py",
-]
+# Files shipped to Pyodide's virtual FS — auto-discovered by scripts/build_package_json.py
+_PACKAGE_FILES: list = json.loads((_BASE / "pyodide_files.json").read_text(encoding="utf-8"))
 
 app = FastAPI(title="Obfuscator API", version="1.0.0")
 
