@@ -40,8 +40,10 @@ const STAGE_CATALOG = {
   },
   renaming: {
     label: 'Renaming',
-    description: 'Replaces all user-defined identifiers with random 8-character names.',
-    defaultConfig: {},
+    description: 'Replaces all user-defined identifiers with obfuscated names. Choose a base generator and optionally stack modifiers on top.',
+    defaultConfig: { base: 'RandomBaseStrategy', modifiers: [] },
+    allBases: ['RandomBaseStrategy', 'HomoglyphAsciiBaseStrategy', 'AntiChatbotBaseStrategy', 'ForeignLanguageBaseStrategy'],
+    allModifiers: ['HomoglyphUnicodeModifier', 'DiacriticChaosModifier'],
   },
 };
 
@@ -138,6 +140,22 @@ class MyStringStrategy(StringObscureStrategy):
         # Return an AST expression that evaluates to value.
         # Use self.rng for randomness; self.naming.get_name() for unique variable names.
         return ast.Constant(value=value)`,
+  renamingBase: `from Renaming.naming_strategies import BaseNamingStrategy
+import random
+
+class MyBaseStrategy(BaseNamingStrategy):
+    def generate_base(self, rng: random.Random) -> str:
+        # Return any string candidate. Do NOT check the namespace here —
+        # collision detection is handled automatically by the framework.
+        return 'x'`,
+  renamingModifier: `from Renaming.naming_strategies import NameModifier
+import random
+
+class MyModifier(NameModifier):
+    def modify(self, name: str, rng: random.Random) -> str:
+        # Transform name and return the modified string.
+        # Invalid identifiers are retried automatically.
+        return name`,
 };
 
 let _nextId = 0;
@@ -152,6 +170,8 @@ function makeInstance(configType) {
     expanded: false,
     config: JSON.parse(JSON.stringify(def.defaultConfig)),
     allStrategies: def.allStrategies ? [...def.allStrategies] : undefined,
+    allBases: def.allBases ? [...def.allBases] : undefined,
+    allModifiers: def.allModifiers ? [...def.allModifiers] : undefined,
   };
 }
 
@@ -200,16 +220,19 @@ function detectPreset(stage) {
   return 'custom';
 }
 
+const shorten = s => s
+  .replace('BaseStrategy', '')
+  .replace('Strategy', '')
+  .replace('Modifier', '')
+  .replace('NonConstantTime', 'NonConst')
+  .replace('Arithmetic', 'Arith')
+  .replace('Conditional', '')
+  .replace('XorString', 'XorStr')
+  .replace('SimpleFeistel', 'SimpleFst')
+  .replace('Random', 'Rand');
+
 function makeSummary(stage) {
   const c = stage.config;
-  const shorten = s => s
-    .replace('Strategy', '')
-    .replace('NonConstantTime', 'NonConst')
-    .replace('Arithmetic', 'Arith')
-    .replace('Conditional', '')
-    .replace('XorString', 'XorStr')
-    .replace('SimpleFeistel', 'SimpleFst')
-    .replace('Random', 'Rand');
   switch (stage.configType) {
     case 'junk': {
       const names = (c.strategies || []).map(shorten).join(', ');
@@ -231,6 +254,11 @@ function makeSummary(stage) {
       const names = (c.strategies || []).map(shorten).join(', ');
       return names || 'none';
     }
+    case 'renaming': {
+      const base = shorten(c.base ?? 'Random');
+      const mods = (c.modifiers || []).map(shorten).join(', ');
+      return mods ? `${base} + ${mods}` : base;
+    }
     default:
       return '';
   }
@@ -241,7 +269,7 @@ function makeSummary(stage) {
 // ============================================================
 
 function hasConfig(stage) {
-  return stage.configType !== 'renaming';
+  return true;
 }
 
 function renderPresetRow(stage) {
@@ -348,6 +376,28 @@ function renderConfigHTML(stage) {
           `).join('')}
         </div>`;
 
+    case 'renaming':
+      return `${descEl}
+        <div class="config-row chip-row">
+          <span class="row-label">Base:</span>
+          ${(stage.allBases || []).map(s => `
+            <button class="stage-chip${c.base === s ? ' active' : ''}"
+                    data-chip="rename_base" data-iid="${iid}" data-value="${s}">
+              ${shorten(s)}
+            </button>
+          `).join('')}
+        </div>
+        ${(stage.allModifiers || []).length ? `
+        <div class="config-row chip-row">
+          <span class="row-label">Modifiers:</span>
+          ${(stage.allModifiers || []).map(s => `
+            <button class="stage-chip${(c.modifiers||[]).includes(s) ? ' active' : ''}"
+                    data-chip="rename_modifier" data-iid="${iid}" data-value="${s}">
+              ${shorten(s)}
+            </button>
+          `).join('')}
+        </div>` : ''}`;
+
     default:
       return descEl;
   }
@@ -360,37 +410,29 @@ function renderStages() {
   state.stages.forEach(stage => {
     const iid = stage.instanceId;
     const li = document.createElement('li');
-    const isPinned = stage.configType === 'renaming';
 
     let cls = 'stage-item';
-    if (isPinned) cls += ' stage-pinned';
     if (!stage.enabled) cls += ' disabled';
     li.className = cls;
     li.dataset.iid = iid;
 
-    const configPanel = hasConfig(stage)
-      ? `<div class="stage-config" id="config-${iid}"
-             style="${stage.expanded ? '' : 'display:none'}">
-           ${renderConfigHTML(stage)}
-         </div>`
-      : '';
+    const configPanel = `<div class="stage-config" id="config-${iid}"
+           style="${stage.expanded ? '' : 'display:none'}">
+         ${renderConfigHTML(stage)}
+       </div>`;
 
-    const summary = hasConfig(stage)
-      ? `<span class="stage-summary">${makeSummary(stage)}</span>`
-      : '';
+    const summary = `<span class="stage-summary">${makeSummary(stage)}</span>`;
 
     const toggleBtn = `<button class="stage-item-btn stage-toggle-btn"
                data-action="toggle" data-iid="${iid}"
                title="${stage.enabled ? 'Disable stage' : 'Enable stage'}">${stage.enabled ? '⊙' : '○'}</button>`;
 
-    const actionBtns = isPinned
-      ? `<button class="stage-item-btn stage-item-remove" data-action="remove" data-iid="${iid}" title="Remove">×</button>`
-      : `<button class="stage-item-btn stage-item-dup" data-action="dup" data-iid="${iid}" title="Duplicate">⧉</button>
+    const actionBtns = `<button class="stage-item-btn stage-item-dup" data-action="dup" data-iid="${iid}" title="Duplicate">⧉</button>
          <button class="stage-item-btn stage-item-remove" data-action="remove" data-iid="${iid}" title="Remove">×</button>`;
 
     li.innerHTML = `
       <div class="stage-row">
-        ${isPinned ? '<span class="drag-handle drag-handle-spacer"></span>' : '<span class="drag-handle">⠿</span>'}
+        <span class="drag-handle">⠿</span>
         <div class="stage-label-group">
           <span class="stage-label">${stage.label}</span>
           ${summary}
@@ -413,11 +455,9 @@ function renderStages() {
     addRow.id = 'add-step-row';
     list.parentElement.appendChild(addRow);
   }
-  const hasRenaming = state.stages.some(s => s.configType === 'renaming');
-  const addableTypes = Object.keys(STAGE_CATALOG).filter(t => t !== 'renaming' || !hasRenaming);
   addRow.innerHTML = `
     <select id="add-step-select">
-      ${addableTypes.map(t => `<option value="${t}">${STAGE_CATALOG[t].label}</option>`).join('')}
+      ${Object.keys(STAGE_CATALOG).map(t => `<option value="${t}">${STAGE_CATALOG[t].label}</option>`).join('')}
     </select>
     <button class="btn-secondary" id="add-step-btn">+ Add step</button>`;
 
@@ -481,23 +521,17 @@ function removeStage(iid) {
 function duplicateStage(iid) {
   const idx = state.stages.findIndex(s => s.instanceId === iid);
   const src = state.stages[idx];
-  if (src.configType === 'renaming') return;
   const copy = makeInstance(src.configType);
   copy.config = JSON.parse(JSON.stringify(src.config));
   copy.allStrategies = src.allStrategies ? [...src.allStrategies] : undefined;
+  copy.allBases = src.allBases ? [...src.allBases] : undefined;
+  copy.allModifiers = src.allModifiers ? [...src.allModifiers] : undefined;
   state.stages.splice(idx + 1, 0, copy);
   renderStages();
 }
 
 function addStage(configType) {
-  const inst = makeInstance(configType);
-  if (configType === 'renaming') {
-    state.stages.push(inst);
-  } else {
-    const renamingIdx = state.stages.findIndex(s => s.configType === 'renaming');
-    const insertAt = renamingIdx >= 0 ? renamingIdx : state.stages.length;
-    state.stages.splice(insertAt, 0, inst);
-  }
+  state.stages.push(makeInstance(configType));
   renderStages();
 }
 
@@ -533,6 +567,13 @@ function handleChipClick(e) {
 
   if (key === 'loop_strategy') {
     stage.config.strategy = value;
+  } else if (key === 'rename_base') {
+    stage.config.base = value;
+  } else if (key === 'rename_modifier') {
+    const arr = stage.config.modifiers;
+    const idx = arr.indexOf(value);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(value);
   } else {
     const arr = stage.config.strategies;
     const idx = arr.indexOf(value);
@@ -577,14 +618,9 @@ function setupSortable(list) {
   if (_sortable) { _sortable.destroy(); _sortable = null; }
   if (typeof Sortable === 'undefined') return;
   _sortable = Sortable.create(list, {
-    handle: '.drag-handle:not(.drag-handle-spacer)',
-    filter: '.stage-pinned',
-    preventOnFilter: false,
+    handle: '.drag-handle',
     animation: 120,
     ghostClass: 'dragging',
-    onMove(evt) {
-      return !evt.related.classList.contains('stage-pinned');
-    },
     onEnd(evt) {
       if (evt.oldIndex === evt.newIndex) return;
       const moved = state.stages.splice(evt.oldIndex, 1)[0];
@@ -829,12 +865,15 @@ from Injectors.junk_conditional_strategies import JunkConditionalStrategy
 from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 from Encryption.number_obscure_strategies import NumberObscureStrategy
 from Encryption.string_obscure_strategies import StringObscureStrategy
+from Renaming.naming_strategies import BaseNamingStrategy, NameModifier
 json.dumps({
     'junk': sorted(k for k in JunkInjectionStrategy._registry if k != 'JunkInjectionStrategy'),
     'conditional': sorted(k for k in JunkConditionalStrategy._registry if k != 'JunkConditionalStrategy'),
     'loop': sorted(k for k in LoopObfuscationStrategy._registry if k != 'LoopObfuscationStrategy'),
     'number': sorted(k for k in NumberObscureStrategy._registry if k != 'NumberObscureStrategy'),
     'string': sorted(k for k in StringObscureStrategy._registry if k != 'StringObscureStrategy'),
+    'naming_base': sorted(k for k in BaseNamingStrategy._registry if k != 'BaseNamingStrategy'),
+    'naming_modifier': sorted(k for k in NameModifier._registry if k != 'NameModifier'),
 })
 `);
 
@@ -846,6 +885,10 @@ json.dumps({
     if (stage.configType === 'conditionals') stage.allStrategies = reg.conditional;
     if (stage.configType === 'numbers')      stage.allStrategies = reg.number;
     if (stage.configType === 'strings')      stage.allStrategies = reg.string;
+    if (stage.configType === 'renaming') {
+      stage.allBases = reg.naming_base;
+      stage.allModifiers = reg.naming_modifier;
+    }
   });
 
   renderStages();
@@ -910,6 +953,8 @@ function init() {
     identities: 'Identity Injection',
     numbers: 'Number Obfuscation',
     strings: 'String Obfuscation',
+    renamingBase: 'Custom Name Generator',
+    renamingModifier: 'Custom Name Modifier',
   };
   $('template-content').innerHTML = Object.entries(STRATEGY_TEMPLATES)
     .map(([k, t]) => `<p class="tmpl-label">${tmplLabels[k]}</p><pre>${t.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`)
