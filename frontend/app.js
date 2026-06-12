@@ -192,7 +192,7 @@ function makeInstance(configType) {
 }
 
 function initStages() {
-  return ['junk', 'bogus_functions', 'loops', 'conditionals', 'identities', 'numbers', 'strings', 'imports', 'renaming'].map(makeInstance);
+  return ['junk', 'bogus_functions', 'loops', 'conditionals', 'identities', 'numbers', 'imports', 'strings', 'renaming'].map(makeInstance);
 }
 
 const state = {

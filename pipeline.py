@@ -31,7 +31,7 @@ from Renaming.renamer import Renamer
 from Renaming.naming_strategies import BaseNamingStrategy, NameModifier, CompositeNamingStrategy
 from NameTracker.naming import Naming
 
-DEFAULT_STAGE_ORDER = ["junk", "bogus_functions", "loops", "conditionals", "identities", "numbers", "strings", "imports", "renaming"]
+DEFAULT_STAGE_ORDER = ["junk", "bogus_functions", "loops", "conditionals", "identities", "numbers", "imports", "strings", "renaming"]
 
 
 @dataclass
