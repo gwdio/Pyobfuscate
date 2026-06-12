@@ -35,7 +35,9 @@ class BaseNamingStrategy:
         while True:
             name = self.generate_base(rng)
             normalized = unicodedata.normalize("NFKC", name)
-            if normalized.isidentifier() and normalized not in namespace:
+            if (normalized.isidentifier()
+                    and normalized not in namespace
+                    and not (normalized.startswith('__') and not normalized.endswith('__'))):
                 namespace.add(normalized)
                 return name
 
@@ -65,7 +67,9 @@ class CompositeNamingStrategy(NamingStrategy):
             for mod in self.modifiers:
                 name = mod.modify(name, rng)
             normalized = unicodedata.normalize("NFKC", name)
-            if normalized.isidentifier() and normalized not in namespace:
+            if (normalized.isidentifier()
+                    and normalized not in namespace
+                    and not (normalized.startswith('__') and not normalized.endswith('__'))):
                 namespace.add(normalized)
                 return name
 
