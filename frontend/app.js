@@ -110,6 +110,27 @@ class MyJunkStrategy(JunkInjectionStrategy):
         # Return AST statement nodes to inject as junk.
         # rng is random.Random; self.junk_vars has pre-generated variable names.
         return []`,
+  bogus_functions: `from Injectors.junk_strategies import JunkInjectionStrategy
+import ast
+from typing import List
+
+class MyBogusBodyStrategy(JunkInjectionStrategy):
+    # __init__ inherited: sets self.junk_vars (list of available variable names)
+    # Used to fill the bodies of injected dead functions.
+
+    def get_junk(self, rng) -> List[ast.stmt]:
+        # Return AST statement nodes for the bogus function body.
+        # rng is random.Random; self.junk_vars has pre-generated variable names.
+        return []`,
+  conditionals: `from Injectors.junk_conditional_strategies import JunkConditionalStrategy
+import ast
+from typing import List
+
+class MyConditionalStrategy(JunkConditionalStrategy):
+    def wrap(self, stmt: ast.stmt, rng) -> List[ast.stmt]:
+        # Wrap stmt in an always-true if block and return the new statement list.
+        # Example: if True: <stmt>
+        return [ast.If(test=ast.Constant(value=True), body=[stmt], orelse=[])]`,
   loops: `from LoopObfuscation.obfuscation_strategies import LoopObfuscationStrategy
 import ast
 from typing import List
@@ -994,6 +1015,8 @@ function init() {
 
   const tmplLabels = {
     junk: 'Junk Injection',
+    bogus_functions: 'Bogus Functions',
+    conditionals: 'Conditional Wrapping',
     loops: 'Loop Obfuscation',
     identities: 'Identity Injection',
     numbers: 'Number Obfuscation',
