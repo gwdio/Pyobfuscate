@@ -9,6 +9,12 @@ const STAGE_CATALOG = {
     defaultConfig: { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
     allStrategies: ['ArithmeticStrategy', 'BitwiseStrategy', 'LambdaStrategy', 'NonConstantTimeStrategy', 'TestStrategy'],
   },
+  bogus_functions: {
+    label: 'Bogus Functions',
+    description: 'Injects dead, never-called functions at module scope to increase code volume and complexity.',
+    defaultConfig: { density: 1, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
+    allStrategies: ['ArithmeticStrategy', 'BitwiseStrategy', 'LambdaStrategy', 'NonConstantTimeStrategy', 'TestStrategy'],
+  },
   loops: {
     label: 'Loop Obfuscation',
     description: 'Converts for loops into while loops with a configurable index-tracking strategy.',
@@ -38,6 +44,11 @@ const STAGE_CATALOG = {
     defaultConfig: { strategies: ['XorStringStrategy', 'CharArrayStrategy'] },
     allStrategies: ['CharArrayStrategy', 'XorStringStrategy'],
   },
+  imports: {
+    label: 'Import Obfuscation',
+    description: 'Replaces import statements with __import__() calls to obscure module dependencies.',
+    defaultConfig: {},
+  },
   renaming: {
     label: 'Renaming',
     description: 'Replaces all user-defined identifiers with obfuscated names. Choose a base generator and optionally stack modifiers on top.',
@@ -52,6 +63,11 @@ const STAGE_PRESETS = {
     light:  { density: 1, strategies: ['BitwiseStrategy'] },
     medium: { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
     heavy:  { density: 4, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy', 'LambdaStrategy'] },
+  },
+  bogus_functions: {
+    light:  { density: 1, strategies: ['BitwiseStrategy'] },
+    medium: { density: 1, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy'] },
+    heavy:  { density: 2, strategies: ['BitwiseStrategy', 'NonConstantTimeStrategy', 'ArithmeticStrategy', 'LambdaStrategy'] },
   },
   loops: {
     light:  { strategy: 'PlainStrategy' },
@@ -176,7 +192,7 @@ function makeInstance(configType) {
 }
 
 function initStages() {
-  return ['junk', 'loops', 'conditionals', 'identities', 'numbers', 'strings', 'renaming'].map(makeInstance);
+  return ['junk', 'bogus_functions', 'loops', 'conditionals', 'identities', 'numbers', 'strings', 'imports', 'renaming'].map(makeInstance);
 }
 
 const state = {
@@ -238,6 +254,12 @@ function makeSummary(stage) {
       const names = (c.strategies || []).map(shorten).join(', ');
       return names ? `${names} · density ${c.density}` : 'no strategies';
     }
+    case 'bogus_functions': {
+      const names = (c.strategies || []).map(shorten).join(', ');
+      return names ? `${names} · density ${c.density}` : 'no strategies';
+    }
+    case 'imports':
+      return '';
     case 'loops':
       return shorten(c.strategy ?? 'Collatz');
     case 'conditionals': {
@@ -313,6 +335,28 @@ function renderConfigHTML(stage) {
             data-config="density" data-iid="${iid}">
           <span class="range-val" id="density-val-${iid}">${c.density}</span>
         </div>`;
+
+    case 'bogus_functions':
+      return `${descEl}
+        ${presetRow}
+        <div class="config-row chip-row">
+          <span class="row-label">Strategies:</span>
+          ${(stage.allStrategies || []).map(s => `
+            <button class="stage-chip${(c.strategies||[]).includes(s) ? ' active' : ''}"
+                    data-chip="bogus_strategy" data-iid="${iid}" data-value="${s}">
+              ${s.replace('Strategy', '')}
+            </button>
+          `).join('')}
+        </div>
+        <div class="config-row">
+          <span class="row-label">Density:</span>
+          <input type="range" min="1" max="5" value="${c.density}"
+            data-config="density" data-iid="${iid}">
+          <span class="range-val" id="density-val-${iid}">${c.density}</span>
+        </div>`;
+
+    case 'imports':
+      return descEl;
 
     case 'loops':
       return `${descEl}
@@ -880,8 +924,9 @@ json.dumps({
   const reg = JSON.parse(registriesJson);
 
   state.stages.forEach(stage => {
-    if (stage.configType === 'junk')         stage.allStrategies = reg.junk;
-    if (stage.configType === 'loops')        stage.allStrategies = reg.loop;
+    if (stage.configType === 'junk')            stage.allStrategies = reg.junk;
+    if (stage.configType === 'bogus_functions') stage.allStrategies = reg.junk;
+    if (stage.configType === 'loops')           stage.allStrategies = reg.loop;
     if (stage.configType === 'conditionals') stage.allStrategies = reg.conditional;
     if (stage.configType === 'numbers')      stage.allStrategies = reg.number;
     if (stage.configType === 'strings')      stage.allStrategies = reg.string;
